@@ -2,19 +2,20 @@
 
 ## Goal
 
-Route local Claude Code through a custom proxy, log all Anthropic API requests and responses, and analyze the traces to understand how Claude Code carries conversation history across turns.
+Route local Claude Code through a custom proxy, log Anthropic API traffic, and convert the raw traces into a replayable dataset for studying context reuse patterns.
 
-The main question is whether Claude Code:
-- mostly appends prior history as a stable prefix, or
-- dynamically injects, rewrites, trims, or summarizes earlier context
+The two working goals are:
+
+1. understand when Claude Code follows prefix-append behavior versus when it rewrites context
+2. collect realistic traces that are useful for studying non-prefix reuse and motivating CacheBlend-style evaluation
 
 This matters for prefix reuse:
 - append-like behavior is more prefix-cache-friendly
 - middle-of-prompt mutation reduces reusable prefix and motivates approaches like CacheBlend
 
-### Finding (pre-`/compact`)
+### Early Finding
 
-**Claude Code uses pure prefix append with a sliding prompt-cache marker.**
+The earliest observation from a simple pre-`/compact` session was that Claude Code behaves like pure prefix append with a sliding prompt-cache marker.
 
 Concretely, for each new turn N, the messages array sent to the API is exactly:
 
@@ -34,7 +35,7 @@ Key observations from `testing_session_trace.jsonl` (76 raw entries, 25 sonnet i
 | Sub-agent calls | Spawn isolated 1-message conversations; not part of the main thread |
 | After `/compact` | History resets to 1 message (compacted summary replaces full history) |
 
-**Implication for prefix caching:** Because the prefix `msg_0 … msg_{N-2}` is completely stable between turns, a KV cache server can reuse cached states for all but the last 1–2 messages. This is maximally cache-friendly — no CacheBlend-style mid-prompt patching is needed for the base case.
+**Implication for prefix caching:** In this simple setting, the prefix `msg_0 … msg_{N-2}` is completely stable between turns, so a KV cache server can reuse cached states for all but the last 1–2 messages. This is the maximally cache-friendly baseline, not the full story for Claude Code overall.
 
 ## Routing Strategy
 
@@ -74,15 +75,6 @@ Recommended initial configuration:
   "env": {
     "ANTHROPIC_BASE_URL": "http://localhost:8201",
     "ANTHROPIC_API_KEY": "ACTUAL_ANTHROPIC_API_KEY",
-    "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-sonnet-4-6"
-  }
-}
-
-{
-  "model": "sonnet",
-  "env": {
-    "ANTHROPIC_BASE_URL": "http://localhost:8201",
-    "ANTHROPIC_API_KEY":"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",
     "ANTHROPIC_DEFAULT_HAIKU_MODEL": "claude-sonnet-4-6"
   }
 }
@@ -141,47 +133,18 @@ Questions asked in claude code:
 5. `/compact` command
 6. Without starting over, what important details from our earlier discussion are you still carrying forward right now, and which details are likely compressed away?
 
-> In total: 6 user queries, 106 LLM requests in 1063.297s for `testing_session` (includes user thinking time between questions). In 106 total records written, there are 53 request records and 53 response records. Inside 53 requests, 30 are POST /v1/messages, 22 are POST /v1/messages/count_tokens, and 1 is HEAD/(health/reachability check). And one more important things to notes, claude code would have a parent thread and have several child LLM calls and each chilren produce outputs and parent consumes the outputs, not necessarily the children's full internal history.
+> In total: 6 user queries and 106 raw records in 1063.297s for `testing_session` (including user thinking time). The 106 records break down into 53 requests and 53 responses. Inside the 53 requests, 30 are `POST /v1/messages`, 22 are `POST /v1/messages/count_tokens`, and 1 is `HEAD /` (health/reachability check). Claude Code also does not behave like a single linear thread: it has a parent thread plus child LLM calls, and the parent consumes child outputs without necessarily carrying the children's full internal history.
 
 
 ### Traces Interpretation
-testing_session` is not pure prefix append end-to-end, but it is still mostly prefix-friendly. So this trace shows that we can manually create non-prefix behavior, but the dominant pattern is still append-with-reset. If the goal is to study realistic non-prefix reuse, we should collect workloads where the harness itself regularly rewrites context.
+`testing_session` is not pure prefix append end-to-end, but it is still mostly prefix-friendly. The main non-prefix behavior comes from `/compact`, which creates append-with-reset segments rather than frequent mid-prompt rewrites.
 
-Natural non-prefix patterns to target:
+Takeaway:
 
-1. `rolling summaries`
-   Replace older dialogue with a refreshed summary every few turns.
-   Example:
-   - Turn 1-5: keep full history
-   - Turn 6: replace turns 1-4 with "Summary so far: user wants X, code path Y was inspected, bug likely in Z"
-   This breaks the old prefix even though the task is still the same.
-
-2. `retrieval refresh`
-   Instead of replaying the whole conversation, re-insert only the currently relevant memory or files.
-   Example:
-   - Early turns retrieve `storage_manager.py` and `local_cpu_backend.py`
-   - Later turns drop those and inject a new short memory pack about `token_database.py` and chunk size
-   The prompt keeps the same task, but the middle context is replaced by a different retrieved set.
-
-3. `changing tool state digests`
-   Recompute a compact state summary from tool results and send that digest instead of the raw prior outputs.
-   Example:
-   - After several shell reads, replace raw file dumps with:
-     "Workspace state: inspected 7 files; confirmed chunk_size=256; no evidence for fixed 5-file prefetch policy"
-   This mutates earlier tool context into a shorter synthesized state block.
-
-4. `dynamic user/agent interaction`
-   Multi-turn tasks where new user information changes which prior details matter.
-   Example:
-   - User first asks for root-cause analysis
-   - Later says "ignore performance, focus only on correctness" or "now explain this to a new engineer"
-   The agent may keep only the facts relevant to the new goal and rewrite or compress the rest.
-
-Practical takeaway:
-
-- `append-only` traces are good for measuring prefix reuse in the best case.
-- `append-with-reset` traces from `/compact` are useful, but still coarse.
-- The most interesting non-prefix traces come from summary refresh, retrieval refresh, and state-digest updates within the same ongoing task.
+- This session is useful for showing that Claude Code can leave the pure append regime.
+- However, the dominant pattern is still prefix growth within a segment.
+- `/compact` is therefore a reliable trigger for collecting non-prefix traces, but it is still a coarse mechanism.
+- For richer non-prefix behavior, the next step is to collect workloads where the harness itself rewrites context, such as rolling summaries, retrieval refresh, or tool-state digests.
 
 ## re-read after edit testing
 Use a small synthetic evaluation built on top of real LMCache PRs. The goal is to test whether Claude Code relies on prior memory, reads only the diff, or re-reads the full file after a small edit.
@@ -207,11 +170,27 @@ Do not rely only on earlier memory or on the diff. Re-read the full current `vll
 - Turn 4:
 If a reviewer had only read the diff, what would they likely miss compared with re-reading the full file?
 
-> In total: 4 user queries, 50 LLM requests in 550.841s for `testing_reRead_session` (includes user thinking time between questions). Essentially in these 4 turns: Turn 1: force a full-file understanding pass; Turn 2(observation turn): introduce the PR and observe whether Claude Code can answer from memory, local diff context, or by re-reading more; Turn 3: explicitly force a fresh full-file re-validation; Turn 4: verify what re-reading added over diff-only review
+> In total: 4 user queries and 50 raw records in 550.841s for `testing_reRead_session` (including user thinking time). The turn structure is: Turn 1 forces a full-file understanding pass; Turn 2 introduces the PR and observes whether Claude Code answers from memory, diff-local context, or fresh reads; Turn 3 explicitly forces re-validation against the full file; Turn 4 checks what re-reading added over diff-only review.
+
+### Traces Interpretation
+This workflow is useful for observing whether Claude Code relies on memory, diff-local reasoning, or fresh file reads after a small code change.
+
+What the trace shows:
+
+- Turn 1 builds a large file-level context, but the file is read progressively because it is too large for a single read.
+- Turn 2 adds PR and diff context on top of that existing history.
+- Turn 3 triggers fresh reads from additional untouched regions of the file.
+- Even with those fresh reads, the parent thread remains mostly prefix-friendly: Claude Code keeps prior context and appends new reads and reasoning.
+
+Takeaway:
+
+- `A + turn2 + fresh_reads` is a useful first-step workload for studying re-read behavior.
+- It is still mostly prefix-append, so it is not the strongest non-prefix or CacheBlend-style case by itself.
+- A stronger target would compress or replace earlier raw context, for example `summary(A) + turn2 + refreshed_chunks(A')`.
 
 # Side Notes
-Claude Code doesn't guaranteed to provide non-prefix behavior even without /compact:
+Claude Code does not guarantee non-prefix behavior even without `/compact`:
 1. Claude Code switches to a different internal persona/sub-agent thread
-2. the harness rewrites system/context blocks
+2. the harness rewrites system or context blocks
 3. retrieved context is refreshed instead of preserved verbatim
-4. some internal summarization/memory management kicks in
+4. some internal summarization or memory management kicks in
