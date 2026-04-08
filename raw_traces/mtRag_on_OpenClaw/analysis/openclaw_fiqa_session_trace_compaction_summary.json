@@ -1,0 +1,47 @@
+{
+  "trace_file": "/Users/jiayuechen/Desktop/NonPrefix_LMCacheDataset/raw_traces/mtRag/traces/openclaw_fiqa_session_trace.jsonl",
+  "request_count": 186,
+  "compact_request_count": 5,
+  "compact_request_ratio": 0.026882,
+  "compaction_burst_count": 1,
+  "bursts_matching_expected_summary_plus_recent_tail": 1,
+  "bursts": [
+    {
+      "burst_request_indexes": [
+        105,
+        106,
+        107,
+        108,
+        109
+      ],
+      "burst_request_ids": [
+        "1775639678221759307",
+        "1775639699822766285",
+        "1775639724025545990",
+        "1775639739091337436",
+        "1775639749547445448"
+      ],
+      "burst_length": 5,
+      "previous_normal_request_index": 104,
+      "previous_normal_request_id": "1775639669644727330",
+      "next_normal_request_index": 110,
+      "next_normal_request_id": "1775639764018010099",
+      "previous_normal_message_count": 205,
+      "next_normal_message_count": 17,
+      "next_has_inserted_summary": true,
+      "next_total_approx_tokens": 25729,
+      "next_summary_approx_tokens": 2420,
+      "direct_prefix_chunk_ratio": 0.0,
+      "direct_prefix_message_ratio": 0.0,
+      "reused_nonprefix_chunk_ratio": 0.678744,
+      "reused_nonprefix_chunk_count": 281,
+      "retained_tail_message_count": 13,
+      "retained_tail_start_index": 1,
+      "retained_tail_approx_tokens": 17353,
+      "retained_tail_ratio": 0.674453,
+      "summary_ratio": 0.094057,
+      "pattern": "summary_plus_tail",
+      "matches_expected_summary_plus_recent_tail": true
+    }
+  ]
+}
