@@ -1,0 +1,1259 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trace Viewer</title>
+  <style>
+    :root {
+      --bg: #f2ede3;
+      --panel: #fffaf1;
+      --panel-strong: #f9efe1;
+      --ink: #221d17;
+      --muted: #6f6457;
+      --grid: #dfd2c1;
+      --prefix: #0284c7;
+      --nonprefix: #d97706;
+      --new: #404040;
+      --accent: #d97706;
+      --accent-soft: #fef3c7;
+      --error: #b91c1c;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at top left, #efe2c8 0, transparent 30%),
+        linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+      color: var(--ink);
+      font: 14px/1.45 Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    }
+    .app {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+    .hero { margin-bottom: 18px; }
+    h1 { margin: 0 0 6px; font-size: 28px; }
+    .subtle { color: var(--muted); }
+    .panel {
+      background: rgba(255,250,241,0.96);
+      border: 1px solid var(--grid);
+      border-radius: 16px;
+      box-shadow: 0 12px 32px rgba(34,29,23,0.08);
+    }
+    .controls {
+      padding: 18px;
+      display: grid;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .control-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      align-items: center;
+    }
+    button, select { font: inherit; }
+    button {
+      border: 1px solid #bea88c;
+      border-radius: 999px;
+      background: #fef7ec;
+      color: var(--ink);
+      padding: 10px 14px;
+      cursor: pointer;
+    }
+    button:hover { background: #fff2db; }
+    button.primary {
+      background: linear-gradient(180deg, #0284c7 0%, #0369a1 100%);
+      border-color: #0369a1;
+      color: #f0f9ff;
+    }
+    button.primary:hover { background: linear-gradient(180deg, #0ea5e9 0%, #0284c7 100%); }
+    .toggle-group {
+      display: inline-flex;
+      gap: 8px;
+      padding: 6px;
+      background: #efe5d6;
+      border-radius: 999px;
+    }
+    .toggle-group button.active {
+      background: #fffaf1;
+      border-color: #d1b89a;
+      box-shadow: 0 2px 8px rgba(34,29,23,0.08);
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .card {
+      padding: 18px;
+      background: rgba(255,250,241,0.96);
+      border: 1px solid var(--grid);
+      border-radius: 16px;
+      box-shadow: 0 8px 24px rgba(34,29,23,0.06);
+    }
+    .card .label { color: var(--ink); font-size: 18px; font-weight: 700; margin-bottom: 10px; letter-spacing: 0.01em; }
+    .card .value { font-size: 28px; font-weight: 600; color: var(--ink); }
+    .card .sub-value { font-size: 14px; color: var(--muted); margin-top: 4px; }
+    .card-highlight {
+      background: linear-gradient(135deg, #fef9ee 0%, #fef3c7 100%);
+      border-color: #d97706;
+      box-shadow: 0 8px 24px rgba(217,119,6,0.10), inset 0 0 0 1px rgba(217,119,6,0.06);
+    }
+    .card-highlight .label { color: #b45309; }
+    .card-highlight .value { color: #92400e; }
+    .summary-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .summary-table th,
+    .summary-table td {
+      border-bottom: 1px solid rgba(223,210,193,0.9);
+      text-align: left;
+      padding: 8px 0;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 14px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+    }
+    .legend-item { display: inline-flex; align-items: center; gap: 8px; }
+    .swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(0,0,0,0.15);
+    }
+    /* Selection info strip */
+    .selection-strip {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 14px;
+      margin-bottom: 10px;
+      background: rgba(59,130,246,0.08);
+      border: 1px solid rgba(59,130,246,0.25);
+      border-radius: 10px;
+      color: #1d4ed8;
+      font-size: 12px;
+    }
+    .selection-strip button {
+      padding: 4px 10px;
+      font-size: 11px;
+      background: rgba(59,130,246,0.12);
+      border-color: rgba(59,130,246,0.3);
+      color: #1d4ed8;
+      border-radius: 999px;
+    }
+    /* Trace rows */
+    .trace-list { display: grid; gap: 10px; margin-bottom: 18px; }
+    .trace-row {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      padding: 12px 14px;
+      cursor: pointer;
+    }
+    .trace-row:hover { background: rgba(239,229,214,0.35); }
+    .trace-row.selected {
+      border-color: #d5b48b;
+      background: rgba(255,242,219,0.52);
+    }
+    .request-meta { min-width: 0; }
+    .request-meta .main { font-size: 15px; margin-bottom: 4px; }
+    .request-meta .sub { color: var(--muted); font-size: 12px; }
+    .bar-wrap { min-width: 220px; }
+    .bar-wrap { margin-top: 2px; }
+    .bar {
+      display: flex;
+      height: 36px;
+      overflow: visible;
+      border-radius: 4px;
+      background: #ece3d7;
+      border: 1px solid rgba(190,168,140,0.6);
+      position: relative;
+    }
+    .segment.prefix-boundary {
+      border-left: 3px solid rgba(34,29,23,0.82);
+      box-shadow: inset 3px 0 0 rgba(255,255,255,0.35);
+    }
+    .selection-layer {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      overflow: hidden;
+      border-radius: 4px;
+      z-index: 4;
+    }
+    .selection-hit {
+      position: absolute;
+      top: 2px;
+      bottom: 2px;
+      min-width: 2px;
+      border-radius: 3px;
+      background: rgba(124, 58, 237, 0.16);
+      border: 2px solid rgba(109, 40, 217, 0.92);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.32);
+    }
+    .selection-hit-prefix {
+      background: rgba(124, 58, 237, 0.08);
+      border-color: rgba(109, 40, 217, 0.78);
+      box-shadow: inset 0 -4px 0 rgba(255,255,255,0.9);
+    }
+    /* Segment base */
+    .segment {
+      min-width: 1px;
+      height: 100%;
+      cursor: pointer;
+      border-right: 1px solid rgba(255,255,255,0.18);
+      position: relative;
+      overflow: hidden;
+      transition: opacity 0.15s ease, outline 0.1s ease;
+    }
+    .segment:first-child { border-radius: 4px 0 0 4px; }
+    .segment:last-child { border-right: none; border-radius: 0 4px 4px 0; }
+    .segment.prefix { background: var(--prefix); opacity: 0.75; }
+    .segment.nonprefix { background: var(--nonprefix); }
+    .segment.new { background: var(--new); opacity: 0.45; }
+    .segment.decode {
+      background-image:
+        repeating-linear-gradient(
+          -45deg,
+          rgba(255,255,255,0.0) 0,
+          rgba(255,255,255,0.0) 6px,
+          rgba(255,255,255,0.3) 6px,
+          rgba(255,255,255,0.3) 9px
+        );
+    }
+    .segment.nonprefix.decode { background-color: var(--nonprefix) !important; }
+    /* Selection states */
+    .bar.selection-active .segment.seg-dimmed {
+      opacity: 0.12;
+    }
+    .bar.selection-active .segment.seg-context {
+      opacity: 0.45;
+    }
+    .bar.selection-active .segment.seg-selected {
+      opacity: 1;
+      outline: 2.5px solid rgba(255,255,255,0.95);
+      outline-offset: -1px;
+      z-index: 3;
+      border-radius: 2px;
+    }
+    .bar.selection-active .segment.seg-selected-prefix {
+      opacity: 1;
+      box-shadow: inset 0 -4px 0 rgba(255,255,255,0.9);
+      z-index: 3;
+    }
+    /* Badge */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: #92400e;
+      font-size: 11px;
+      border: 1px solid rgba(217,119,6,0.18);
+      margin-left: 8px;
+    }
+    /* Detail panel */
+    .detail { display: grid; gap: 14px; padding: 18px; }
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 10px;
+    }
+    .detail-box {
+      padding: 12px;
+      background: rgba(249,239,225,0.82);
+      border: 1px solid var(--grid);
+      border-radius: 12px;
+    }
+    .detail-box .label { color: var(--muted); font-size: 12px; margin-bottom: 6px; }
+    .detail-box .value { white-space: pre-wrap; word-break: break-word; }
+    .chunk-table { width: 100%; border-collapse: collapse; }
+    .chunk-table th,
+    .chunk-table td {
+      text-align: left;
+      border-bottom: 1px solid rgba(223,210,193,0.9);
+      padding: 8px 6px;
+      vertical-align: top;
+    }
+    .chunk-row-selected { background: rgba(59,130,246,0.07); }
+    .hidden { display: none !important; }
+    .status { margin-left: auto; color: var(--muted); }
+    .error {
+      color: var(--error);
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      background: #fff3f3;
+      border: 1px solid #f0c4c4;
+      border-radius: 14px;
+    }
+    .empty { padding: 28px 18px; color: var(--muted); text-align: center; }
+    /* Billing header toggle */
+    .billing-toggle {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      padding: 14px 20px;
+      margin-bottom: 18px;
+      background: rgba(255,250,241,0.96);
+      border: 1px solid var(--grid);
+      border-radius: 14px;
+      box-shadow: 0 4px 16px rgba(34,29,23,0.05);
+    }
+    .billing-toggle.billing-on {
+      background: linear-gradient(135deg, #fef9ee 0%, #fef3c7 100%);
+      border-color: #d97706;
+    }
+    .billing-toggle .switch-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .billing-toggle .switch-track {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      background: #ccc5b8;
+      border-radius: 24px;
+      transition: background 0.25s;
+      flex-shrink: 0;
+    }
+    .billing-toggle.billing-on .switch-track {
+      background: #d97706;
+    }
+    .billing-toggle .switch-knob {
+      position: absolute;
+      left: 3px;
+      top: 3px;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.15);
+      transition: transform 0.25s;
+    }
+    .billing-toggle.billing-on .switch-knob {
+      transform: translateX(20px);
+    }
+    .billing-toggle .switch-label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .billing-toggle .switch-desc {
+      font-size: 12px;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+    .billing-toggle.billing-on .switch-label { color: #92400e; }
+    .billing-toggle.billing-on .switch-desc { color: #b45309; }
+    @media (max-width: 1100px) { .trace-row { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <script>
+  window.__TRACE_DATA__ = /*__TRACE_DATA_PLACEHOLDER__*/null;
+  </script>
+
+  <div class="app">
+    <section class="hero">
+      <h1>Trace Viewer</h1>
+    </section>
+
+    <div id="billingToggle" class="billing-toggle hidden">
+      <div id="billingSwitch" class="switch-wrap">
+        <div class="switch-track"><div class="switch-knob"></div></div>
+        <span class="switch-label">CLAUDE_CODE_ATTRIBUTION_HEADER=0</span>
+      </div>
+      <span id="billingDesc" class="switch-desc">OFF — billing header present, prefix breaks every turn</span>
+    </div>
+
+    <section class="panel controls">
+      <div class="control-row">
+        <div id="modeToggle" class="toggle-group">
+          <button data-mode="request_only" class="active">Request Cache Only</button>
+          <button data-mode="include_decode_cache">Include Response Cache</button>
+        </div>
+        <label id="sessionWrap" class="hidden">Session:
+          <select id="sessionSelect"></select>
+        </label>
+        <span id="statusText" class="status"></span>
+      </div>
+    </section>
+
+    <div id="errorBox" class="error hidden"></div>
+
+    <section id="summarySection" class="hidden">
+      <div id="summaryCards" class="summary-grid"></div>
+      <div class="panel legend">
+        <div class="legend-item"><span class="swatch" style="background:var(--prefix);opacity:0.75"></span>Prefix reuse</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--nonprefix)"></span>Non-prefix reuse</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--nonprefix);background-image:repeating-linear-gradient(-45deg,rgba(255,255,255,0.0) 0,rgba(255,255,255,0.0) 6px,rgba(255,255,255,0.3) 6px,rgba(255,255,255,0.3) 9px)"></span>Decode-cache reuse</div>
+        <div class="legend-item"><span class="swatch" style="background:var(--new);opacity:0.45"></span>New compute</div>
+        <div class="legend-item" style="color:var(--muted);font-size:11px">Estimates use tiktoken o200k_base, not the real tokenizer. No cache eviction is modeled. Click a bar segment to track its text across turns.</div>
+      </div>
+    </section>
+
+    <div id="selectionStrip" class="selection-strip hidden">
+      <span id="selectionLabel">0 text regions selected</span>
+      <button id="clearSelectionBtn">Clear</button>
+    </div>
+
+    <section id="traceSection" class="panel hidden">
+      <div id="traceList" class="trace-list"></div>
+      <div id="emptyState" class="empty">No trace data loaded.</div>
+    </section>
+
+    <section id="detailSection" class="panel hidden">
+      <div class="detail">
+        <div id="detailHeader" class="request-meta">
+          <div class="main">Select a request row to inspect chunk details.</div>
+        </div>
+        <div id="detailGrid" class="detail-grid"></div>
+        <div id="chunkTableWrap"></div>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    // ── state ──────────────────────────────────────────────────────────────
+    const state = {
+      analysis: null,
+      mode: "request_only",
+      billingHeader: "included",
+      sessionId: null,
+      selectedRequestIndex: null,
+      selectedPatterns: [],
+    };
+
+    const el = {
+      modeToggle:       document.getElementById("modeToggle"),
+      sessionWrap:      document.getElementById("sessionWrap"),
+      sessionSelect:    document.getElementById("sessionSelect"),
+      statusText:       document.getElementById("statusText"),
+      errorBox:         document.getElementById("errorBox"),
+      summarySection:   document.getElementById("summarySection"),
+      summaryCards:     document.getElementById("summaryCards"),
+      traceSection:     document.getElementById("traceSection"),
+      traceList:        document.getElementById("traceList"),
+      emptyState:       document.getElementById("emptyState"),
+      detailSection:    document.getElementById("detailSection"),
+      detailHeader:     document.getElementById("detailHeader"),
+      detailGrid:       document.getElementById("detailGrid"),
+      chunkTableWrap:   document.getElementById("chunkTableWrap"),
+      selectionStrip:   document.getElementById("selectionStrip"),
+      selectionLabel:   document.getElementById("selectionLabel"),
+      clearSelectionBtn:document.getElementById("clearSelectionBtn"),
+      billingToggle:    document.getElementById("billingToggle"),
+      billingSwitch:    document.getElementById("billingSwitch"),
+      billingDesc:      document.getElementById("billingDesc"),
+    };
+
+    // ── visual-group pre-processing ────────────────────────────────────────
+    const MERGE_THRESHOLD_TOKENS = 256 * 6; // 1536 tokens
+
+    function makePatternKey(fingerprintIds) {
+      return fingerprintIds.join("|");
+    }
+
+    function groupFamilyKey(chunk) {
+      if (chunk.kind === "prefix") {
+        return "prefix:" + (chunk.from_decode_cache ? "decode" : "input") + ":" + (chunk.source_request_index != null ? chunk.source_request_index : "na");
+      }
+      if (chunk.kind === "nonprefix") {
+        if (chunk.from_decode_cache) {
+          return "decode:" + (chunk.source_request_index != null ? chunk.source_request_index : "na");
+        }
+        return "nonprefix:" + (chunk.first_seen_request_index != null ? chunk.first_seen_request_index : "na") + ":" + (chunk.source_request_index != null ? chunk.source_request_index : "na");
+      }
+      return "new";
+    }
+
+    function buildGroupFromRun(run) {
+      var first = run[0];
+      var last = run[run.length - 1];
+      var fingerprintIds = run.map(function(chunk) { return chunk.fingerprint_id; }).filter(Boolean);
+      var textValue = run.map(function(chunk) { return chunk.text_value || ""; }).join("");
+      return {
+        isGroup: run.length > 1,
+        kind: first.kind,
+        from_decode_cache: Boolean(first.from_decode_cache),
+        first_seen_request_index: first.first_seen_request_index,
+        source_request_index: first.source_request_index,
+        token_start: first.token_start,
+        token_end: last.token_end,
+        token_count: run.reduce(function(sum, chunk) { return sum + chunk.token_count; }, 0),
+        fingerprint_ids: fingerprintIds,
+        pattern_key: fingerprintIds.length ? makePatternKey(fingerprintIds) : null,
+        text_preview: first.text_preview || "",
+        text_value: textValue,
+        chunks: run,
+      };
+    }
+
+    function flushRunIntoGroups(groups, run) {
+      if (!run.length) return;
+      var pending = [];
+      var pendingTokens = 0;
+
+      for (var i = 0; i < run.length; i++) {
+        var chunk = run[i];
+        pending.push(chunk);
+        pendingTokens += chunk.token_count;
+        if (pendingTokens >= MERGE_THRESHOLD_TOKENS) {
+          groups.push(buildGroupFromRun(pending));
+          pending = [];
+          pendingTokens = 0;
+        }
+      }
+
+      if (pending.length) {
+        groups.push(buildGroupFromRun(pending));
+      }
+    }
+
+    function buildVisualGroups(chunks) {
+      if (!chunks || !chunks.length) return [];
+      var groups = [];
+      var run = [chunks[0]];
+
+      for (var i = 1; i < chunks.length; i++) {
+        var chunk = chunks[i];
+        var prev = run[run.length - 1];
+        var sameRun =
+          prev.token_end === chunk.token_start &&
+          prev.kind === chunk.kind &&
+          Boolean(prev.from_decode_cache) === Boolean(chunk.from_decode_cache) &&
+          groupFamilyKey(prev) === groupFamilyKey(chunk);
+
+        if (sameRun) {
+          run.push(chunk);
+          continue;
+        }
+
+        flushRunIntoGroups(groups, run);
+        run = [chunk];
+      }
+
+      flushRunIntoGroups(groups, run);
+      return groups;
+    }
+
+    function displayChunkSize() {
+      return Number(state.analysis && state.analysis.chunk_size) || 256;
+    }
+
+    function displayChunksForRequest(request) {
+      if (Array.isArray(request.aligned_full_chunks) && request.aligned_full_chunks.length) {
+        return request.aligned_full_chunks;
+      }
+      var chunkSize = displayChunkSize();
+      return request.chunks.filter(function(chunk) { return chunk.token_count === chunkSize; });
+    }
+
+    // ── fingerprint index for token-level click-to-track ─────────────────
+    function buildFingerprintIndex(sessionData) {
+      if (sessionData._fpIndex) return sessionData._fpIndex;
+      var fpIndex = new Map();
+      function addEntry(fpId, entry) {
+        if (!fpId) return;
+        if (!fpIndex.has(fpId)) fpIndex.set(fpId, []);
+        fpIndex.get(fpId).push(entry);
+      }
+      for (var ri = 0; ri < sessionData.requests.length; ri++) {
+        var request = sessionData.requests[ri];
+        var displayChunks = displayChunksForRequest(request);
+        for (var ci = 0; ci < displayChunks.length; ci++) {
+          var chunk = displayChunks[ci];
+          var entry = {
+            requestIndex: request.request_index,
+            displayChunkPos: ci,
+            chunk: chunk,
+          };
+          addEntry(chunk.fingerprint_id, entry);
+          // Also index the match fingerprint so nonprefix chunks at shifted
+          // positions can be found via the matcher's stored fingerprint.
+          if (chunk.match_fingerprint_id && chunk.match_fingerprint_id !== chunk.fingerprint_id) {
+            addEntry(chunk.match_fingerprint_id, entry);
+          }
+        }
+      }
+      sessionData._fpIndex = fpIndex;
+      return fpIndex;
+    }
+
+    function buildPatternFromGroup(group, request) {
+      // Collect both content fingerprints and match fingerprints
+      var seen = {};
+      var fingerprintIds = [];
+      for (var i = 0; i < group.chunks.length; i++) {
+        var c = group.chunks[i];
+        if (c.fingerprint_id && !seen[c.fingerprint_id]) {
+          seen[c.fingerprint_id] = true;
+          fingerprintIds.push(c.fingerprint_id);
+        }
+        if (c.match_fingerprint_id && !seen[c.match_fingerprint_id]) {
+          seen[c.match_fingerprint_id] = true;
+          fingerprintIds.push(c.match_fingerprint_id);
+        }
+      }
+      if (!fingerprintIds.length) return null;
+
+      return {
+        id: request.request_index + ":" + group.token_start + ":" + group.token_end,
+        originRequestIndex: request.request_index,
+        originTokenStart: group.token_start,
+        originTokenEnd: group.token_end,
+        tokenCount: group.token_count,
+        originKind: group.kind,
+        fingerprintIds: fingerprintIds,
+        preview: (group.text_preview || "").substring(0, 120),
+      };
+    }
+
+    function computeSelectionData(sessionData) {
+      var requestMap = new Map();
+      var patternMap = new Map();
+      if (!sessionData || state.selectedPatterns.length === 0) {
+        return { requestMap: requestMap, patternMap: patternMap };
+      }
+
+      var fpIndex = buildFingerprintIndex(sessionData);
+
+      for (var pi = 0; pi < state.selectedPatterns.length; pi++) {
+        var pattern = state.selectedPatterns[pi];
+        var summary = {
+          pattern: pattern,
+          turnCount: 0,
+          occurrenceCount: 0,
+          occurrences: [],
+        };
+        var matchedRequests = new Set();
+        var seenChunks = {};
+
+        // BFS: follow chains of match_fingerprint_id to trace content
+        // across requests even when aligned positions shift
+        var searchQueue = pattern.fingerprintIds.slice();
+        var processedFps = {};
+
+        while (searchQueue.length > 0) {
+          var nextQueue = [];
+          for (var qi = 0; qi < searchQueue.length; qi++) {
+            var fpId = searchQueue[qi];
+            if (processedFps[fpId]) continue;
+            processedFps[fpId] = true;
+
+            var locations = fpIndex.get(fpId);
+            if (!locations) continue;
+
+            for (var li = 0; li < locations.length; li++) {
+              var loc = locations[li];
+              var chunkKey = loc.requestIndex + ":" + loc.chunk.chunk_index;
+              if (seenChunks[chunkKey]) continue;
+              seenChunks[chunkKey] = true;
+              matchedRequests.add(loc.requestIndex);
+
+              if (!requestMap.has(loc.requestIndex)) {
+                requestMap.set(loc.requestIndex, {
+                  chunkIndexes: new Set(),
+                  patternIds: new Set(),
+                  occurrences: [],
+                });
+              }
+
+              var entry = requestMap.get(loc.requestIndex);
+              entry.chunkIndexes.add(loc.chunk.chunk_index);
+              entry.patternIds.add(pattern.id);
+
+              var occ = {
+                patternId: pattern.id,
+                requestIndex: loc.requestIndex,
+                displayChunkPos: loc.displayChunkPos,
+                chunkIndex: loc.chunk.chunk_index,
+                tokenStart: loc.chunk.token_start,
+                tokenEnd: loc.chunk.token_end,
+                tokenCount: loc.chunk.token_count,
+                kind: loc.chunk.kind,
+                fingerprintId: fpId,
+              };
+              entry.occurrences.push(occ);
+              summary.occurrences.push(occ);
+
+              // Follow this chunk's fingerprints to continue the chain
+              var cFp = loc.chunk.fingerprint_id;
+              var mFp = loc.chunk.match_fingerprint_id;
+              if (cFp && !processedFps[cFp]) nextQueue.push(cFp);
+              if (mFp && !processedFps[mFp]) nextQueue.push(mFp);
+            }
+          }
+          searchQueue = nextQueue;
+        }
+
+        summary.turnCount = matchedRequests.size;
+        summary.occurrenceCount = summary.occurrences.length;
+        patternMap.set(pattern.id, summary);
+      }
+
+      return { requestMap: requestMap, patternMap: patternMap };
+    }
+
+    function togglePatternSelection(group, request, additive) {
+      var pattern = buildPatternFromGroup(group, request);
+      if (!pattern) {
+        state.selectedPatterns = [];
+        return;
+      }
+
+      if (!additive) {
+        var alreadyOnlySelected =
+          state.selectedPatterns.length === 1 &&
+          state.selectedPatterns[0].id === pattern.id;
+        state.selectedPatterns = alreadyOnlySelected ? [] : [pattern];
+        return;
+      }
+
+      var existingIndex = -1;
+      for (var i = 0; i < state.selectedPatterns.length; i++) {
+        if (state.selectedPatterns[i].id === pattern.id) {
+          existingIndex = i;
+          break;
+        }
+      }
+      if (existingIndex >= 0) {
+        state.selectedPatterns.splice(existingIndex, 1);
+      } else {
+        state.selectedPatterns = state.selectedPatterns.concat([pattern]);
+      }
+    }
+
+    // ── formatting helpers ─────────────────────────────────────────────────
+    function formatInt(v) { return Number(v || 0).toLocaleString(); }
+    function formatPct(v) { return (Number(v || 0) * 100).toFixed(2) + "%"; }
+    function escapeHtml(v) {
+      return String(v == null ? "" : v)
+        .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+
+    function showError(msg) { el.errorBox.textContent = msg; el.errorBox.classList.remove("hidden"); }
+    function clearError() { el.errorBox.textContent = ""; el.errorBox.classList.add("hidden"); }
+
+    function currentModeData() {
+      if (!state.analysis || !state.analysis.modes) return null;
+      if (state.billingHeader === "included" && state.analysis.modes_with_billing_header) {
+        return state.analysis.modes_with_billing_header[state.mode] || null;
+      }
+      return state.analysis.modes[state.mode] || null;
+    }
+    function currentSessionData() {
+      var md = currentModeData();
+      if (!md || !md.sessions) return null;
+      for (var i = 0; i < md.sessions.length; i++) {
+        if (md.sessions[i].session_id === state.sessionId) return md.sessions[i];
+      }
+      return null;
+    }
+    function ensureSelectedRequest() {
+      var s = currentSessionData();
+      if (!s || !s.requests || !s.requests.length) { state.selectedRequestIndex = null; return; }
+      var found = false;
+      for (var i = 0; i < s.requests.length; i++) {
+        if (s.requests[i].request_index === state.selectedRequestIndex) { found = true; break; }
+      }
+      if (!found) state.selectedRequestIndex = s.requests[0].request_index;
+    }
+
+    // ── renderSummary ──────────────────────────────────────────────────────
+    function renderSummary() {
+      var sessionData = currentSessionData();
+      if (!sessionData) { el.summarySection.classList.add("hidden"); return; }
+      el.summarySection.classList.remove("hidden");
+
+      var decodeNPTotalEst = 0;
+      for (var ri = 0; ri < sessionData.requests.length; ri++) {
+        var req = sessionData.requests[ri];
+        for (var ci = 0; ci < req.chunks.length; ci++) {
+          var c = req.chunks[ci];
+          if (c.from_decode_cache && c.kind === "nonprefix") {
+            decodeNPTotalEst += c.token_count;
+          }
+        }
+      }
+      var npTotalEst = sessionData.nonprefix_reusable_tokens_est;
+      var npRatio = sessionData.input_tokens_est ? npTotalEst / sessionData.input_tokens_est : 0;
+      var totalReusable = sessionData.prefix_tokens_est + npTotalEst;
+      var cacheHitRatio = sessionData.input_tokens_est ? totalReusable / sessionData.input_tokens_est : 0;
+      var npSubLine = formatInt(npTotalEst) + " tokens";
+      if (decodeNPTotalEst > 0) {
+        npSubLine += " \u00b7 " + formatInt(decodeNPTotalEst) + " from decode cache";
+      }
+
+      // [label, main display, sub-line, highlight]
+      var cards = [
+        ["Prefix Reuse",          formatPct(sessionData.prefix_ratio_est), formatInt(sessionData.prefix_tokens_est) + " tokens", false],
+        ["Non-Prefix Reuse",      formatPct(npRatio), npSubLine, true],
+        ["New Compute",           formatPct(sessionData.new_compute_ratio_est), formatInt(sessionData.new_compute_tokens_est) + " tokens", false],
+        ["Cache Hit Rate",        formatPct(cacheHitRatio), formatInt(totalReusable) + " reusable tokens", false],
+        ["Session",               formatInt(sessionData.request_count) + " requests", "", false],
+        ["Input Tokens",          formatInt(sessionData.input_tokens_est), "", false],
+        ["Output Tokens",         formatInt(sessionData.response_output_tokens_est), "", false],
+        ["Total Tokens",          formatInt(sessionData.total_tokens_est), "", false],
+      ];
+
+      el.summaryCards.innerHTML = cards.map(function(card) {
+        var highlightClass = card[3] ? " card-highlight" : "";
+        return '<div class="card' + highlightClass + '">' +
+          '<div class="label">' + escapeHtml(card[0]) + '</div>' +
+          '<div class="value">' + escapeHtml(card[1]) + '</div>' +
+          (card[2] ? '<div class="sub-value">' + escapeHtml(card[2]) + '</div>' : "") +
+        '</div>';
+      }).join("");
+    }
+
+    // ── renderSessions ─────────────────────────────────────────────────────
+    function renderSessions() {
+      if (!state.analysis) { el.sessionWrap.classList.add("hidden"); return; }
+      var md = currentModeData();
+      if (!md) { el.sessionWrap.classList.add("hidden"); return; }
+      var sessions = md.sessions;
+      if (sessions.length <= 1) { el.sessionWrap.classList.add("hidden"); return; }
+      el.sessionWrap.classList.remove("hidden");
+      el.sessionSelect.innerHTML = sessions.map(function(s) {
+        return '<option value="' + escapeHtml(s.session_id) + '">' + escapeHtml(s.session_id) + '</option>';
+      }).join("");
+      el.sessionSelect.value = state.sessionId;
+    }
+
+    // ── renderSelectionStrip ───────────────────────────────────────────────
+    function renderSelectionStrip() {
+      if (state.selectedPatterns.length === 0) {
+        el.selectionStrip.classList.add("hidden");
+        return;
+      }
+      el.selectionStrip.classList.remove("hidden");
+      var sessionData = currentSessionData();
+      var selectionData = computeSelectionData(sessionData);
+      var patternSummaries = state.selectedPatterns
+        .map(function(pattern) { return selectionData.patternMap.get(pattern.id); })
+        .filter(Boolean);
+
+      var totalTurns = 0;
+      var totalOccurrences = 0;
+      for (var i = 0; i < patternSummaries.length; i++) {
+        totalTurns += patternSummaries[i].turnCount;
+        totalOccurrences += patternSummaries[i].occurrenceCount;
+      }
+
+      if (patternSummaries.length === 1) {
+        var s = patternSummaries[0];
+        var chunkWord = s.pattern.fingerprintIds.length === 1 ? "chunk" : "chunks";
+        el.selectionLabel.textContent =
+          "Tracking " + s.pattern.fingerprintIds.length + " " + chunkWord + " from request " + s.pattern.originRequestIndex +
+          " \u00b7 " + formatInt(s.pattern.tokenCount) + " tokens" +
+          " \u00b7 " + s.turnCount + " request" + (s.turnCount === 1 ? "" : "s") + " matched" +
+          " \u00b7 shift+click to add";
+        return;
+      }
+
+      el.selectionLabel.textContent =
+        "Tracking " + patternSummaries.length + " regions \u00b7 " +
+        totalTurns + " request matches \u00b7 " +
+        totalOccurrences + " chunk hits \u00b7 shift+click to add, click clear to reset";
+    }
+
+    // ── renderTrace ────────────────────────────────────────────────────────
+    function renderTrace() {
+      var sessionData = currentSessionData();
+      if (!sessionData) { el.traceSection.classList.add("hidden"); return; }
+      el.traceSection.classList.remove("hidden");
+      ensureSelectedRequest();
+
+      if (!sessionData.requests || !sessionData.requests.length) {
+        el.traceList.innerHTML = "";
+        el.emptyState.textContent = "No requests found in this session.";
+        el.emptyState.classList.remove("hidden");
+        el.detailSection.classList.add("hidden");
+        return;
+      }
+      el.emptyState.classList.add("hidden");
+
+      // Proportional bar width: scale relative to session maximum using only display chunks.
+      var maxDisplayTokens = 1;
+      for (var mi = 0; mi < sessionData.requests.length; mi++) {
+        var dtc = displayChunksForRequest(sessionData.requests[mi]).reduce(function(sum, chunk) { return sum + chunk.token_count; }, 0);
+        if (dtc > maxDisplayTokens) maxDisplayTokens = dtc;
+      }
+
+      var selectionData = computeSelectionData(sessionData);
+
+      el.traceList.innerHTML = sessionData.requests.map(function(request) {
+        var displayChunks = displayChunksForRequest(request);
+        var groups = buildVisualGroups(displayChunks);
+        var displayTokenTotal = displayChunks.reduce(function(sum, chunk) { return sum + chunk.token_count; }, 0);
+        var requestSelection = selectionData.requestMap.get(request.request_index) || {
+          chunkIndexes: new Set(),
+          patternIds: new Set(),
+          occurrences: [],
+        };
+
+        // Token count summary line
+        var tokenSummary = formatInt(request.input_tokens_est) + " tokens";
+
+        // Bar proportional width
+        var barWidthPct = displayTokenTotal > 0
+          ? (displayTokenTotal / maxDisplayTokens) * 100
+          : 0;
+
+        // Build segment spans from visual groups
+        // Find the first non-prefix group index for chunk-level boundary marker
+        var firstNonPrefixGroupIndex = -1;
+        for (var gi = 0; gi < groups.length; gi++) {
+          if (groups[gi].kind !== "prefix") {
+            // Only mark boundary if there is at least one prefix group before it
+            if (gi > 0) firstNonPrefixGroupIndex = gi;
+            break;
+          }
+        }
+
+        var segmentHtml = groups.map(function(group, groupIndex) {
+          var widthPct = displayTokenTotal > 0
+            ? (group.token_count / displayTokenTotal) * 100 : 0;
+
+          var classes = ["segment", group.kind];
+          if (group.from_decode_cache) classes.push("decode");
+          if (groupIndex === firstNonPrefixGroupIndex) classes.push("prefix-boundary");
+
+          // Tooltip
+          var kindLabel = group.kind === "prefix" ? "Prefix reuse"
+            : group.kind === "nonprefix" ? "Non-prefix reuse" : "New compute";
+          if (group.from_decode_cache) kindLabel += " (decode cache)";
+          if (groupIndex === firstNonPrefixGroupIndex) kindLabel = "\u25c0 prefix ends \u00b7 " + kindLabel;
+          var titleParts = [kindLabel, formatInt(group.token_count) + " tokens"];
+          if (group.kind === "nonprefix" && group.source_request_index != null) {
+            titleParts.push("reused from request " + group.source_request_index);
+          }
+          var title = titleParts.join(" \u00b7 ");
+
+          return '<span class="' + classes.join(" ") + '" style="width:' + widthPct + '%;" title="' + escapeHtml(title) + '" data-group-index="' + groupIndex + '" data-request-index="' + request.request_index + '"></span>';
+        }).join("");
+
+        // Selection overlay — position by display chunk token offset
+        var numDisplayChunks = displayChunks.length;
+        var overlayHtml = requestSelection.occurrences.map(function(occurrence) {
+          var leftPct = numDisplayChunks > 0 ? (occurrence.displayChunkPos / numDisplayChunks) * 100 : 0;
+          var widthPct = numDisplayChunks > 0 ? Math.max((1 / numDisplayChunks) * 100, 0.45) : 0;
+          var hitClass = occurrence.kind === "prefix"
+            ? "selection-hit selection-hit-prefix"
+            : "selection-hit";
+          var kindLabel = occurrence.kind === "prefix" ? "prefix"
+            : occurrence.kind === "nonprefix" ? "non-prefix reuse" : "new";
+          var title = kindLabel + " \u00b7 tokens " + occurrence.tokenStart + "\u2013" + occurrence.tokenEnd;
+          return '<span class="' + hitClass + '" style="left:' + leftPct + '%;width:' + widthPct + '%;" title="' + escapeHtml(title) + '"></span>';
+        }).join("");
+
+        // Match badge
+        var matchBadge = requestSelection.patternIds.size
+          ? ' <span class="badge" style="background:#ede9fe;color:#6d28d9;border-color:rgba(109,40,217,0.18)">' + escapeHtml(requestSelection.occurrences.length + " chunk" + (requestSelection.occurrences.length === 1 ? "" : "s")) + '</span>'
+          : "";
+
+        return '<div class="trace-row ' + (request.request_index === state.selectedRequestIndex ? "selected" : "") + '" data-request-index="' + request.request_index + '">' +
+          '<div class="request-meta">' +
+            '<div class="main">Request ' + request.request_index + matchBadge + '</div>' +
+            '<div class="sub">' + escapeHtml(tokenSummary) + '</div>' +
+          '</div>' +
+          '<div class="bar-wrap">' +
+            '<div class="bar" style="' + (displayTokenTotal > 0 ? "width:" + barWidthPct + "%" : "width:56px;opacity:0.35") + '" data-request-index="' + request.request_index + '">' +
+              segmentHtml +
+              (overlayHtml ? '<div class="selection-layer">' + overlayHtml + '</div>' : "") +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }).join("");
+
+      // Row click -> select request
+      var rows = el.traceList.querySelectorAll(".trace-row");
+      for (var i = 0; i < rows.length; i++) {
+        (function(row) {
+          row.addEventListener("click", function() {
+            state.selectedRequestIndex = Number(row.dataset.requestIndex);
+            renderTrace();
+            renderDetail();
+          });
+        })(rows[i]);
+      }
+
+      // Segment click -> follow reused chunks
+      var segs = el.traceList.querySelectorAll(".segment");
+      for (var i = 0; i < segs.length; i++) {
+        (function(seg) {
+          seg.addEventListener("click", function(e) {
+            e.stopPropagation();
+            var requestIndex = Number(seg.dataset.requestIndex);
+            var groupIndex = Number(seg.dataset.groupIndex);
+            var request = null;
+            for (var ri = 0; ri < sessionData.requests.length; ri++) {
+              if (sessionData.requests[ri].request_index === requestIndex) {
+                request = sessionData.requests[ri];
+                break;
+              }
+            }
+            if (!request) return;
+            var groups = buildVisualGroups(displayChunksForRequest(request));
+            var group = groups[groupIndex];
+            if (!group) return;
+            state.selectedRequestIndex = requestIndex;
+            togglePatternSelection(group, request, e.shiftKey);
+            renderSelectionStrip();
+            renderTrace();
+            renderDetail();
+          });
+        })(segs[i]);
+      }
+
+      renderDetail();
+    }
+
+    // ── renderDetail ───────────────────────────────────────────────────────
+    function renderDetail() {
+      var sessionData = currentSessionData();
+      if (!sessionData || !sessionData.requests || !sessionData.requests.length) {
+        el.detailSection.classList.add("hidden"); return;
+      }
+      var request = null;
+      for (var i = 0; i < sessionData.requests.length; i++) {
+        if (sessionData.requests[i].request_index === state.selectedRequestIndex) {
+          request = sessionData.requests[i];
+          break;
+        }
+      }
+      if (!request) { el.detailSection.classList.add("hidden"); return; }
+      var selectionData = computeSelectionData(sessionData);
+      var requestSelection = selectionData.requestMap.get(request.request_index) || {
+        chunkIndexes: new Set(),
+        patternIds: new Set(),
+        occurrences: [],
+      };
+
+      el.detailSection.classList.remove("hidden");
+      var hasSelection = state.selectedPatterns.length > 0;
+
+      // ── Chunk tracking section (only when chunks are selected) ──
+      if (hasSelection) {
+        var decodeNPChunks = request.chunks.filter(function(c) { return c.from_decode_cache && c.kind === "nonprefix"; });
+        var decodeNPTokens = decodeNPChunks.reduce(function(s, c) { return s + c.token_count; }, 0);
+
+        // Tracking header
+        var trackingPattern = state.selectedPatterns[0];
+        var chunkWord = trackingPattern.fingerprintIds.length === 1 ? "chunk" : "chunks";
+        el.detailHeader.innerHTML =
+          '<div class="main">Chunk Tracking</div>' +
+          '<div class="sub">' + trackingPattern.fingerprintIds.length + ' ' + chunkWord +
+            ' selected from request ' + trackingPattern.originRequestIndex +
+            ' \u00b7 ' + formatInt(trackingPattern.tokenCount) + ' tokens' +
+            (trackingPattern.originKind ? ' \u00b7 ' + trackingPattern.originKind : '') +
+          '</div>';
+
+        // Hide the request metrics grid when showing tracking
+        el.detailGrid.innerHTML = "";
+
+        // Tracking occurrences table
+        var occurrenceTableRows = "";
+        for (var pi = 0; pi < state.selectedPatterns.length; pi++) {
+          var pattern = state.selectedPatterns[pi];
+          var summary = selectionData.patternMap.get(pattern.id);
+          if (!summary || !summary.occurrences.length) {
+            occurrenceTableRows +=
+              '<tr>' +
+                '<td>' + escapeHtml("req " + pattern.originRequestIndex + " \u00b7 " + formatInt(pattern.tokenCount) + " tokens") + '</td>' +
+                '<td>-</td><td>-</td><td>-</td>' +
+              '</tr>';
+          } else {
+            for (var oi = 0; oi < summary.occurrences.length; oi++) {
+              var occ = summary.occurrences[oi];
+              var kindLabel = occ.kind === "prefix" ? "prefix"
+                : occ.kind === "nonprefix" ? "non-prefix reuse" : "new compute";
+              occurrenceTableRows +=
+                '<tr>' +
+                  '<td>req ' + pattern.originRequestIndex + ' \u00b7 tokens ' + occ.tokenStart + '\u2013' + occ.tokenEnd + '</td>' +
+                  '<td>Request ' + occ.requestIndex + '</td>' +
+                  '<td>' + escapeHtml(occ.tokenStart + "\u2013" + occ.tokenEnd) + '</td>' +
+                  '<td>' + escapeHtml(kindLabel) + '</td>' +
+                '</tr>';
+            }
+          }
+        }
+
+        el.chunkTableWrap.innerHTML =
+          '<table class="chunk-table">' +
+            '<thead><tr>' +
+              '<th>Selected Chunk</th><th>Appears In</th><th>Token Range</th><th>Reuse Type</th>' +
+            '</tr></thead>' +
+            '<tbody>' + occurrenceTableRows + '</tbody>' +
+          '</table>';
+        return;
+      }
+
+      // ── Request detail section (when no chunks are selected) ──
+      var decodeNPChunks = request.chunks.filter(function(c) { return c.from_decode_cache && c.kind === "nonprefix"; });
+      var decodeNPTokens = decodeNPChunks.reduce(function(s, c) { return s + c.token_count; }, 0);
+
+      var requestIdLabel = request.request_id ? ' \u00b7 id: ' + request.request_id : '';
+      el.detailHeader.innerHTML =
+        '<div class="main">Request ' + request.request_index + '</div>' +
+        '<div class="sub">' + formatInt(request.input_tokens_est) + ' input tokens \u00b7 ' + formatInt(request.response_output_tokens_est) + ' output tokens' + escapeHtml(requestIdLabel) + '</div>';
+
+      var npSub = formatPct(request.nonprefix_reusable_tokens_est / (request.input_tokens_est || 1)) + " of input";
+      if (decodeNPTokens > 0) {
+        npSub += " \u00b7 " + formatInt(decodeNPTokens) + " from decode cache";
+      }
+
+      var detailItems = [
+        ["Prefix Reuse",        formatInt(request.prefix_tokens_est), formatPct(request.prefix_ratio_est) + " of input" + (request.prefix_source_request_index != null ? " \u00b7 from request " + request.prefix_source_request_index : "")],
+        ["Non-Prefix Reuse",    formatInt(request.nonprefix_reusable_tokens_est), npSub],
+        ["New Compute",         formatInt(request.new_compute_tokens_est), formatPct(request.new_compute_ratio_est) + " of input"],
+      ];
+
+      el.detailGrid.innerHTML = detailItems.map(function(item) {
+        return '<div class="detail-box">' +
+          '<div class="label" style="font-size:14px;font-weight:600;color:var(--ink)">' + escapeHtml(item[0]) + '</div>' +
+          '<div class="value">' + escapeHtml(item[1]) + '</div>' +
+          (item[2] ? '<div style="font-size:12px;color:var(--muted);margin-top:4px">' + escapeHtml(item[2]) + '</div>' : "") +
+        '</div>';
+      }).join("");
+
+      // Chunk table for the selected request
+      var chunkRows = "";
+      for (var ci = 0; ci < request.chunks.length; ci++) {
+        var chunk = request.chunks[ci];
+        var kindLabel = chunk.kind;
+        if (chunk.from_decode_cache) kindLabel += " (decode)";
+        var sourceLabel = "-";
+        if (chunk.kind === "prefix" || chunk.kind === "nonprefix") {
+          sourceLabel = chunk.source_request_index != null ? "req " + chunk.source_request_index : "-";
+        }
+        chunkRows +=
+          '<tr>' +
+            '<td>' + chunk.chunk_index + '</td>' +
+            '<td>' + escapeHtml(kindLabel) + '</td>' +
+            '<td>' + escapeHtml(chunk.token_start + "\u2013" + chunk.token_end) + '</td>' +
+            '<td>' + escapeHtml(sourceLabel) + '</td>' +
+            '<td style="max-width:360px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:11px;color:var(--muted)">' + escapeHtml((chunk.text_preview || "").substring(0, 140)) + '</td>' +
+          '</tr>';
+      }
+
+      el.chunkTableWrap.innerHTML =
+        '<table class="chunk-table">' +
+          '<thead><tr>' +
+            '<th>Chunk</th><th>Type</th><th>Token Range</th>' +
+            '<th>Reused From</th><th>Text Preview</th>' +
+          '</tr></thead>' +
+          '<tbody>' + chunkRows + '</tbody>' +
+        '</table>';
+    }
+
+    // ── renderAll ──────────────────────────────────────────────────────────
+    function renderAll() {
+      if (!state.analysis) return;
+      renderBillingToggle();
+      renderSessions();
+      renderSummary();
+      renderSelectionStrip();
+      renderTrace();
+    }
+
+    // ── event listeners ────────────────────────────────────────────────────
+    el.modeToggle.addEventListener("click", function(e) {
+      var button = e.target.closest("button[data-mode]");
+      if (!button || !state.analysis) return;
+      state.mode = button.dataset.mode;
+      var buttons = el.modeToggle.querySelectorAll("button");
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].classList.toggle("active", buttons[i].dataset.mode === state.mode);
+      }
+      var md = currentModeData();
+      if (md && md.sessions && md.sessions.length) {
+        state.sessionId = md.sessions[0].session_id;
+      } else {
+        state.sessionId = null;
+      }
+      state.selectedRequestIndex = null;
+      state.selectedPatterns = [];
+      renderAll();
+    });
+
+    el.sessionSelect.addEventListener("change", function() {
+      state.sessionId = el.sessionSelect.value;
+      state.selectedRequestIndex = null;
+      state.selectedPatterns = [];
+      renderAll();
+    });
+
+    el.clearSelectionBtn.addEventListener("click", function() {
+      state.selectedPatterns = [];
+      renderSelectionStrip();
+      renderTrace();
+      renderDetail();
+    });
+
+    el.billingSwitch.addEventListener("click", function() {
+      state.billingHeader = (state.billingHeader === "included") ? "stripped" : "included";
+      renderBillingToggle();
+      state.selectedPatterns = [];
+      var md = currentModeData();
+      if (md && md.sessions && md.sessions.length) {
+        state.sessionId = md.sessions[0].session_id;
+      }
+      state.selectedRequestIndex = null;
+      renderAll();
+    });
+
+    function renderBillingToggle() {
+      if (!state.analysis || !state.analysis.has_billing_headers) {
+        el.billingToggle.classList.add("hidden");
+        return;
+      }
+      el.billingToggle.classList.remove("hidden");
+      if (state.billingHeader === "stripped") {
+        el.billingToggle.classList.add("billing-on");
+        el.billingDesc.textContent = "ON \u2014 billing header stripped, prefix cache preserved";
+      } else {
+        el.billingToggle.classList.remove("billing-on");
+        el.billingDesc.textContent = "OFF \u2014 billing header present, prefix breaks every turn";
+      }
+    }
+
+    // ── auto-initialize from embedded data ─────────────────────────────────
+    (function() {
+      state.analysis = window.__TRACE_DATA__;
+      if (!state.analysis) {
+        el.statusText.textContent = "No trace data embedded.";
+        return;
+      }
+      state.mode = "request_only";
+      state.billingHeader = state.analysis.has_billing_headers ? "included" : "stripped";
+      state.sessionId = (state.analysis.detected_sessions && state.analysis.detected_sessions[0]) || null;
+      state.selectedRequestIndex = null;
+      state.selectedPatterns = [];
+      // Activate the correct mode button
+      var buttons = el.modeToggle.querySelectorAll("button");
+      for (var i = 0; i < buttons.length; i++) {
+        buttons[i].classList.toggle("active", buttons[i].dataset.mode === state.mode);
+      }
+      el.statusText.textContent = state.analysis.trace_file || "embedded trace";
+      renderAll();
+    })();
+  </script>
+</body>
+</html>

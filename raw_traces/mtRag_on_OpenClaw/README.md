@@ -47,15 +47,6 @@ For this experiment, the retrieved corpus content was inlined into the prompt, a
 
 OpenClaw was configured to call a local proxy, which forwarded requests to the backend model server. We recorded the raw backend-facing `POST /v1/chat/completions` traffic.
 
-## What Is In This Folder
-
-- [traces](/Users/jiayuechen/Desktop/NonPrefix_LMCacheDataset/raw_traces/mtRag_on_OpenClaw/traces): raw JSONL traces
-- [analysis](/Users/jiayuechen/Desktop/NonPrefix_LMCacheDataset/raw_traces/mtRag_on_OpenClaw/analysis): offline compaction summaries
-- [visualizations](/Users/jiayuechen/Desktop/NonPrefix_LMCacheDataset/raw_traces/mtRag_on_OpenClaw/visualizations): HTML per-turn views
-- [analyze_compaction.py](/Users/jiayuechen/Desktop/NonPrefix_LMCacheDataset/raw_traces/mtRag_on_OpenClaw/analyze_compaction.py): derives compaction episodes and summary-vs-tail structure
-- [visualize_trace.py](/Users/jiayuechen/Desktop/NonPrefix_LMCacheDataset/raw_traces/mtRag_on_OpenClaw/visualize_trace.py): renders per-turn tables with prefix/non-prefix bars
-- [split_trace_jsonl.py](/Users/jiayuechen/Desktop/NonPrefix_LMCacheDataset/raw_traces/mtRag_on_OpenClaw/split_trace_jsonl.py): splits large traces for easier manual inspection
-
 ## Key Results
 
 Across the 4 fields:
@@ -99,13 +90,32 @@ So the main conclusion is:
 
 - Token counts in the analysis and visualization are approximate. The raw traces do not include backend prompt usage, so token counts are estimated from normalized message text.
 
-## View the Visualizer
+## Rough Offline Calculation
+### Results
 
-Open the 4 session views directly:
+| Session | Questions | Total Tokens | Prefix Tokens | Prefix Ratio | Non-Prefix Reusable | Non-Prefix Reusable Ratio | New Compute |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| `clapnq` | 208 | 17,185,207 | 16,905,465 | <mark>98.37%</mark> | 19,532 | <mark>0.11%</mark> | 260,210 |
+| `fiqa` | 180 | 15,358,164 | 15,026,228 | <mark>97.84%</mark> | 18,010 | <mark>0.12%</mark> | 313,926 |
+| `govt` | 201 | 22,533,212 | 19,143,080 | <mark>84.95%</mark> | 260,622 | <mark>1.16%</mark> | 3,129,510 |
+| `cloud` | 188 | 17,548,846 | 13,873,074 | <mark>79.05%</mark> | 138,787 | <mark>0.79%</mark> | 3,536,985 |
 
-```bash
-open raw_traces/mtRag_on_OpenClaw/visualizations/openclaw_clapnq_session_trace.html
-open raw_traces/mtRag_on_OpenClaw/visualizations/openclaw_fiqa_session_trace.html
-open raw_traces/mtRag_on_OpenClaw/visualizations/openclaw_govt_session_trace.html
-open raw_traces/mtRag_on_OpenClaw/visualizations/openclaw_cloud_session_trace.html
-```
+total tokens = prefix + non-prefix reusable + new compute
+
+prefix ratio = prefix / total
+
+non-prefix reusable ratio = non-prefix reusable / total
+
+Offline calculation maintain 2 local caches 1 for prefix and 1 for non-prefix reusable chunks and I have 256 characters for 1 chunk:
+- earlier visible prompts give:
+    prefix cache: ABCD, ABDF
+    non-prefix cache chunks: A B C D F
+- current prompt: ABDFACFB
+    Then:
+    prefix = ABDF
+    non-prefix reusable = A C F B
+    new compute = whatever remaining chunks were not cached
+
+| Session | Questions | Total Tokens | Prefix Tokens | Prefix Ratio | Non-Prefix Reusable | Non-Prefix Reusable Ratio | New Compute |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| All 4 combined | 777 | 72,625,429	| 64,947,847 | <mark>89.43%</mark> | 436,951 | <mark>0.60%</mark> | 7,240,631 |
