@@ -9,5 +9,4 @@ __pycache__/
 # Large files exceeding GitHub 100MB limit
 mtRag_traces_prompt_building/cloud_original.jsonl
 mtRag_traces_prompt_building/clapnq_original.jsonl
-raw_traces/repo_on_OpenClaw/LMCache_full_100_trace.jsonl
-raw_traces/repo_on_OpenClaw/html_output/LMCache_full_100_trace.html
+raw_traces/repo_on_OpenClaw/
