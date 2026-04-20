@@ -1,13 +1,15 @@
 """
 Offline CacheBlend-style trace analysis and visualization.
 
-Reads Anthropic-format raw JSONL traces, groups requests by session, and
-computes prefix / non-prefix / new-compute token reuse metrics with per-chunk
-visualization metadata.
+Reads raw JSONL traces (Anthropic or OpenClaw/OpenAI format), groups requests
+by session, and computes prefix / non-prefix / new-compute token reuse metrics
+with per-block visualization metadata.
 
 Usage:
     python offline_analysis/analyze_trace.py <trace.jsonl>
+    python offline_analysis/analyze_trace.py <trace.jsonl> --format openclaw
     python offline_analysis/analyze_trace.py <trace.jsonl> --html output.html
+    python offline_analysis/analyze_trace.py <trace.jsonl> --format openclaw --html output.html
 """
 
 from __future__ import annotations
@@ -35,6 +37,121 @@ from cacheblend_hashes import (
 # ── Constants ──────────────────────────────────────────────────────────────
 
 DEFAULT_TIKTOKEN_ENCODING = "o200k_base"
+
+
+# ── Agent type detection ──────────────────────────────────────────────────
+
+def _detect_agent_type(body: dict[str, Any]) -> str:
+    """Classify a request as main agent, subagent, compact, or init.
+
+    Detection uses the tool set as fingerprint:
+    - Main agent: has the "Agent" tool (can spawn subagents)
+    - Subagent: has tools but no "Agent" tool
+    - Compact: only 0-2 tools (compaction/summary agent)
+    - Init: no tools at all (initialization request)
+    """
+    tools = body.get("tools")
+    if not isinstance(tools, list) or not tools:
+        return "no_tools"
+    tool_names = {t.get("name", "") for t in tools if isinstance(t, dict)}
+    if len(tool_names) <= 2:
+        return "compact"
+    if "Agent" in tool_names:
+        return "main"
+    return "subagent"
+
+
+def _detect_agent_type_openclaw(body: dict[str, Any]) -> str:
+    """Classify an OpenClaw request — simplified since there's no Agent tool.
+
+    OpenClaw sessions are single-agent with accumulating history.
+    """
+    tools = body.get("tools")
+    if isinstance(tools, list) and tools:
+        return "with_tools"
+    return "session"
+
+
+def _compute_tool_fingerprint_openclaw(body: dict[str, Any]) -> str:
+    """Hash of sorted tool function names in OpenAI function-call format."""
+    tools = body.get("tools")
+    if not isinstance(tools, list) or not tools:
+        return "no_tools"
+    names = sorted(
+        t.get("function", {}).get("name", "")
+        for t in tools
+        if isinstance(t, dict)
+    )
+    return "|".join(names)
+
+
+def _compute_tool_fingerprint(body: dict[str, Any]) -> str:
+    """Hash of sorted tool names — identifies distinct agent configurations."""
+    tools = body.get("tools")
+    if not isinstance(tools, list) or not tools:
+        return "no_tools"
+    names = sorted(t.get("name", "") for t in tools if isinstance(t, dict))
+    return "|".join(names)
+
+
+def _extract_agent_handoffs(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Extract Agent tool handoff data (spawn prompt + return result) from messages."""
+    handoffs: list[dict[str, Any]] = []
+    # Pass 1: collect Agent tool_use blocks
+    agent_tool_uses: dict[str, dict[str, Any]] = {}
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content", [])
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_use" and block.get("name") == "Agent":
+                inp = block.get("input", {})
+                if isinstance(inp, dict):
+                    prompt_text = str(inp.get("prompt", ""))
+                    agent_tool_uses[block.get("id", "")] = {
+                        "prompt_preview": prompt_text[:500],
+                        "prompt_length": len(prompt_text),
+                        "description": str(inp.get("description", "")),
+                        "subagent_type": str(inp.get("subagent_type", "")),
+                    }
+    # Pass 2: match tool_results to Agent tool_uses
+    for msg in messages:
+        if not isinstance(msg, dict):
+            continue
+        content = msg.get("content", [])
+        if not isinstance(content, list):
+            continue
+        for block in content:
+            if not isinstance(block, dict):
+                continue
+            if block.get("type") == "tool_result":
+                tu_id = block.get("tool_use_id", "")
+                if tu_id in agent_tool_uses:
+                    tu_info = agent_tool_uses.pop(tu_id)
+                    result_content = block.get("content", "")
+                    if isinstance(result_content, list):
+                        result_text = " ".join(
+                            b.get("text", "")
+                            for b in result_content
+                            if isinstance(b, dict) and b.get("type") == "text"
+                        )
+                    elif isinstance(result_content, str):
+                        result_text = result_content
+                    else:
+                        result_text = str(result_content)
+                    handoffs.append({
+                        "prompt_preview": tu_info["prompt_preview"],
+                        "prompt_length": tu_info["prompt_length"],
+                        "description": tu_info["description"],
+                        "subagent_type": tu_info["subagent_type"],
+                        "result_preview": result_text[:500],
+                        "result_length": len(result_text),
+                    })
+    return handoffs
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────
@@ -159,6 +276,46 @@ def build_prompt_structure(
     return prompt
 
 
+def build_prompt_structure_openclaw(
+    body: dict[str, Any],
+    *,
+    strip_assistant_thinking: bool = True,
+) -> dict[str, Any]:
+    """Build prompt structure for OpenClaw/OpenAI format traces.
+
+    In OpenClaw format, system is messages[0] with role="system" — there is
+    no top-level 'system' field.  Tools (if any) use OpenAI function format.
+    """
+    prompt: dict[str, Any] = {}
+
+    messages: list[dict[str, Any]] = []
+    for message in body.get("messages", []):
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role", ""))
+        normalized_message = {
+            "role": role,
+            "content": _normalize_content(
+                message.get("content"),
+                strip_assistant_thinking=strip_assistant_thinking,
+                role=role,
+            ),
+        }
+        for key, value in message.items():
+            if key in {"role", "content"}:
+                continue
+            normalized_message[key] = value
+        messages.append(normalized_message)
+
+    prompt["messages"] = messages
+
+    tools = body.get("tools")
+    if isinstance(tools, list) and tools:
+        prompt["tools"] = tools
+
+    return prompt
+
+
 def _serialize_prompt_sections(prompt: dict[str, Any]) -> list[str]:
     sections: list[str] = []
 
@@ -169,6 +326,23 @@ def _serialize_prompt_sections(prompt: dict[str, Any]) -> list[str]:
     system = prompt.get("system")
     if system:
         sections.append(_stable_json({"section": "system", "blocks": system}))
+
+    for message in prompt.get("messages", []):
+        sections.append(_stable_json({"section": "message", "message": message}))
+
+    return sections
+
+
+def _serialize_prompt_sections_openclaw(prompt: dict[str, Any]) -> list[str]:
+    """Serialize OpenClaw prompt: messages only (system is already messages[0]).
+
+    If tools are present, they come before messages.
+    """
+    sections: list[str] = []
+
+    tools = prompt.get("tools")
+    if tools:
+        sections.append(_stable_json({"section": "tools", "tools": tools}))
 
     for message in prompt.get("messages", []):
         sections.append(_stable_json({"section": "message", "message": message}))
@@ -213,6 +387,62 @@ def serialize_assistant_response_sections(
     return [_stable_json({"section": "message", "message": message})]
 
 
+def serialize_assistant_response_sections_openclaw(
+    body: dict[str, Any],
+    *,
+    strip_assistant_thinking: bool = True,
+) -> list[str]:
+    """Extract and serialize assistant response from OpenAI/OpenClaw format.
+
+    Response body is: {"choices": [{"message": {"role": "assistant", "content": "..."}}], ...}
+    """
+    choices = body.get("choices", [])
+    if not choices:
+        return []
+    choice = choices[0] if isinstance(choices, list) else {}
+    message = choice.get("message", {}) if isinstance(choice, dict) else {}
+    content = message.get("content", "")
+    if not content:
+        return []
+    normalized = _normalize_content(
+        content,
+        strip_assistant_thinking=strip_assistant_thinking,
+        role="assistant",
+    )
+    if not normalized:
+        return []
+    msg: dict[str, Any] = {"role": "assistant", "content": normalized}
+    return [_stable_json({"section": "message", "message": msg})]
+
+
+def _build_compact_response_body_openclaw(body: dict[str, Any]) -> dict[str, Any]:
+    """Build a compact version of the OpenAI/OpenClaw response body."""
+    compact: dict[str, Any] = {}
+
+    for key in ("id", "object", "model"):
+        if key in body:
+            compact[key] = body[key]
+
+    if "usage" in body:
+        compact["usage"] = body["usage"]
+
+    if "cache_metrics" in body:
+        compact["cache_metrics"] = body["cache_metrics"]
+
+    choices = body.get("choices", [])
+    if choices and isinstance(choices, list):
+        choice = choices[0]
+        if isinstance(choice, dict):
+            msg = choice.get("message", {})
+            content = msg.get("content", "") if isinstance(msg, dict) else ""
+            if isinstance(content, str) and len(content) > 300:
+                content = content[:300] + "..."
+            compact["choices"] = [{"message": {"role": "assistant", "content": content},
+                                   "finish_reason": choice.get("finish_reason")}]
+
+    return compact
+
+
 # ── Tokenization ───────────────────────────────────────────────────────────
 
 def _get_encoding():
@@ -225,8 +455,15 @@ def tokenize_sections(sections: list[str]) -> list[int]:
     return list(_get_encoding().encode("\n".join(sections)))
 
 
-def tokenize_prompt(prompt: dict[str, Any]) -> tuple[list[str], list[int]]:
-    sections = _serialize_prompt_sections(prompt)
+def tokenize_prompt(
+    prompt: dict[str, Any],
+    *,
+    trace_format: str = "claudecode",
+) -> tuple[list[str], list[int]]:
+    if trace_format == "openclaw":
+        sections = _serialize_prompt_sections_openclaw(prompt)
+    else:
+        sections = _serialize_prompt_sections(prompt)
     return sections, tokenize_sections(sections)
 
 
@@ -239,6 +476,7 @@ def _select_non_overlapping_matches(
     total_token_count: int,
 ) -> list[BlendMatchResult]:
     selected: list[BlendMatchResult] = []
+    seen_storage_hashes: set[bytes] = set()
     next_free = prefix_token_count
 
     for match in sorted(matches, key=lambda item: (item.cur_st, item.cur_ed)):
@@ -248,7 +486,10 @@ def _select_non_overlapping_matches(
             continue
         if match.cur_st < next_free:
             continue
+        if match.storage_hash in seen_storage_hashes:
+            continue
         selected.append(match)
+        seen_storage_hashes.add(match.storage_hash)
         next_free = match.cur_ed
     return selected
 
@@ -317,6 +558,122 @@ def _best_prefix_match(
 
 def _preview_text(sections: list[str], *, limit: int = 240) -> str:
     return "\n".join(sections)[:limit]
+
+
+def _truncate_content_blocks(
+    content: Any,
+    *,
+    text_limit: int = 300,
+) -> Any:
+    """Truncate text in content blocks for compact display."""
+    if isinstance(content, str):
+        return content[:text_limit] + ("..." if len(content) > text_limit else "")
+    if not isinstance(content, list):
+        return content
+    result: list[Any] = []
+    for block in content:
+        if isinstance(block, dict):
+            cb = dict(block)
+            if "text" in cb and isinstance(cb["text"], str) and len(cb["text"]) > text_limit:
+                cb["text"] = cb["text"][:text_limit] + "..."
+            # Truncate tool input if present
+            if "input" in cb and isinstance(cb["input"], (str, dict)):
+                inp = cb["input"]
+                if isinstance(inp, str) and len(inp) > text_limit:
+                    cb["input"] = inp[:text_limit] + "..."
+                elif isinstance(inp, dict):
+                    inp_str = json.dumps(inp, ensure_ascii=False)
+                    if len(inp_str) > text_limit:
+                        cb["input"] = json.loads(inp_str[:text_limit] + "...")  if False else f"({len(inp_str)} chars)"
+            result.append(cb)
+        else:
+            result.append(block)
+    return result
+
+
+def _build_compact_request_body(body: dict[str, Any]) -> dict[str, Any]:
+    """Build a compact version of the request body for raw trace display.
+
+    Follows ProxyTrace convention: tools stripped to count, system truncated,
+    messages stored as count (expanded separately), other fields kept as-is.
+    Order: model → tools → system → thinking → other params → messages count.
+    """
+    compact: dict[str, Any] = {}
+
+    # Model first
+    if "model" in body:
+        compact["model"] = body["model"]
+
+    # Speed / effort
+    if "speed" in body:
+        compact["speed"] = body["speed"]
+    if "output_config" in body:
+        compact["output_config"] = body["output_config"]
+
+    # Tools — replace with count
+    tools = body.get("tools")
+    if isinstance(tools, list) and tools:
+        compact["tools"] = f"[{len(tools)} tool definitions stripped]"
+    elif isinstance(tools, list):
+        compact["tools"] = []
+
+    # Stream
+    if "stream" in body:
+        compact["stream"] = body["stream"]
+
+    # System — keep structure but truncate text
+    raw_sys = body.get("system")
+    if raw_sys is not None:
+        if isinstance(raw_sys, str):
+            compact["system"] = raw_sys[:500] + ("..." if len(raw_sys) > 500 else "")
+        elif isinstance(raw_sys, list):
+            compact["system"] = _truncate_content_blocks(raw_sys, text_limit=300)
+        else:
+            compact["system"] = raw_sys
+
+    # Thinking
+    if "thinking" in body:
+        compact["thinking"] = body["thinking"]
+
+    # Max tokens
+    for key in ("max_tokens", "maxTokens"):
+        if key in body:
+            compact[key] = body[key]
+
+    # Temperature, top_p, top_k
+    for key in ("temperature", "top_p", "top_k", "stop_sequences"):
+        if key in body:
+            compact[key] = body[key]
+
+    # Metadata
+    if "metadata" in body:
+        compact["metadata"] = body["metadata"]
+
+    # Messages — just the count, actual messages shown separately
+    messages = body.get("messages", [])
+    compact["messages"] = f"[{len(messages)} messages — see below]"
+
+    return compact
+
+
+def _build_compact_response_body(body: dict[str, Any]) -> dict[str, Any]:
+    """Build a compact version of the response body for raw trace display."""
+    compact: dict[str, Any] = {}
+
+    for key in ("type", "id", "model", "role", "stop_reason"):
+        if key in body:
+            compact[key] = body[key]
+
+    if "usage" in body:
+        compact["usage"] = body["usage"]
+
+    content = body.get("content")
+    if isinstance(content, list):
+        compact["content"] = _truncate_content_blocks(content, text_limit=300)
+    elif content is not None:
+        compact["content"] = content
+
+    return compact
 
 
 def _build_visual_chunks(
@@ -564,6 +921,20 @@ class RequestMetrics:
     prefix_source_request_index: int | None
     chunks: list[dict[str, Any]]
     aligned_full_chunks: list[dict[str, Any]]
+    agent_type: str = "main"
+    agent_group_id: int = 0
+    model: str = ""
+    system_preview: str = ""
+    tool_names: list[str] = field(default_factory=list)
+    messages_summary: list[dict[str, Any]] = field(default_factory=list)
+    request_body_compact: dict[str, Any] = field(default_factory=dict)
+    response_body_compact: dict[str, Any] = field(default_factory=dict)
+    agent_handoffs: list[dict[str, Any]] = field(default_factory=list)
+    timestamp_utc: str = ""
+    timestamp_rel_s: float | None = None
+    response_timestamp_utc: str = ""
+    response_timestamp_rel_s: float | None = None
+    duration_s: float | None = None
     provider_input_tokens: int | None = None
     provider_cache_read_input_tokens: int | None = None
     provider_cache_creation_input_tokens: int | None = None
@@ -591,6 +962,20 @@ class RequestMetrics:
             "request_index": self.request_index,
             "request_id": self.request_id,
             "raw_line_number": self.raw_line_number,
+            "agent_type": self.agent_type,
+            "agent_group_id": self.agent_group_id,
+            "model": self.model,
+            "system_preview": self.system_preview,
+            "tool_names": self.tool_names,
+            "messages_summary": self.messages_summary,
+            "request_body_compact": self.request_body_compact,
+            "response_body_compact": self.response_body_compact,
+            "agent_handoffs": self.agent_handoffs,
+            "timestamp_utc": self.timestamp_utc,
+            "timestamp_rel_s": self.timestamp_rel_s,
+            "response_timestamp_utc": self.response_timestamp_utc,
+            "response_timestamp_rel_s": self.response_timestamp_rel_s,
+            "duration_s": self.duration_s,
             "input_tokens_est": self.input_tokens_est,
             "response_output_tokens_est": self.response_output_tokens_est,
             "total_tokens_est": self.total_tokens_est,
@@ -640,11 +1025,14 @@ class SessionState:
     chunk_size: int
     cache_source_mode: CacheSourceMode
     strip_billing_header: bool = True
+    trace_format: str = "claudecode"
     prefix_hasher: RollingPrefixHasher = field(init=False)
     matcher: BlendTokenRangeMatcher = field(init=False)
     prefix_sequences: list[PrefixSequence] = field(default_factory=list)
     requests: list[RequestMetrics] = field(default_factory=list)
     count_tokens_request_count: int = 0
+    _agent_group_counter: int = field(default=0, init=False)
+    _prev_tool_fingerprint: str = field(default="", init=False)
 
     def __post_init__(self) -> None:
         self.prefix_hasher = RollingPrefixHasher(self.chunk_size)
@@ -659,12 +1047,123 @@ class SessionState:
     ) -> RequestMetrics:
         request_index = len(self.requests) + 1
         body = record.get("body") or {}
-        prompt = build_prompt_structure(
-            body,
-            strip_assistant_thinking=strip_assistant_thinking,
-            strip_billing_header=self.strip_billing_header,
-        )
-        prompt_sections, token_ids = tokenize_prompt(prompt)
+
+        # Extract timestamps
+        req_timestamp_utc = str(record.get("timestamp_utc", ""))
+        req_timestamp_rel_s = record.get("timestamp_rel_s")
+        if req_timestamp_rel_s is not None:
+            try:
+                req_timestamp_rel_s = float(req_timestamp_rel_s)
+            except (ValueError, TypeError):
+                req_timestamp_rel_s = None
+
+        # Detect agent type and assign group ID
+        if self.trace_format == "openclaw":
+            agent_type = _detect_agent_type_openclaw(body)
+            tool_fp = _compute_tool_fingerprint_openclaw(body)
+        else:
+            agent_type = _detect_agent_type(body)
+            tool_fp = _compute_tool_fingerprint(body)
+        if tool_fp != self._prev_tool_fingerprint:
+            self._agent_group_counter += 1
+            self._prev_tool_fingerprint = tool_fp
+
+        # Extract model name, system preview, tool names, messages summary
+        model_name = body.get("model", "")
+
+        if self.trace_format == "openclaw":
+            # OpenClaw: system is messages[0] with role="system"
+            raw_messages = body.get("messages", [])
+            system_preview = ""
+            if raw_messages and isinstance(raw_messages[0], dict) and raw_messages[0].get("role") == "system":
+                sys_content = raw_messages[0].get("content", "")
+                if isinstance(sys_content, str):
+                    system_preview = sys_content[:500]
+            # OpenAI function format: {"type": "function", "function": {"name": ...}}
+            raw_tools = body.get("tools", [])
+            tool_names_list = [
+                t.get("function", {}).get("name", "")
+                for t in raw_tools
+                if isinstance(t, dict)
+            ]
+        else:
+            raw_system = body.get("system", [])
+            system_preview = ""
+            if isinstance(raw_system, str):
+                system_preview = raw_system[:500]
+            elif isinstance(raw_system, list):
+                parts = []
+                for sb in raw_system:
+                    if isinstance(sb, dict):
+                        parts.append(sb.get("text", "")[:300])
+                    elif isinstance(sb, str):
+                        parts.append(sb[:300])
+                system_preview = "\n".join(parts)[:500]
+            raw_tools = body.get("tools", [])
+            tool_names_list = [
+                t.get("name", "") for t in raw_tools if isinstance(t, dict)
+            ]
+            raw_messages = body.get("messages", [])
+
+        messages_summary: list[dict[str, Any]] = []
+        for msg in raw_messages:
+            if not isinstance(msg, dict):
+                continue
+            role = str(msg.get("role", ""))
+            content = msg.get("content", "")
+            if isinstance(content, str):
+                preview = content[:300]
+                length = len(content)
+            elif isinstance(content, list):
+                parts = []
+                for block in content:
+                    if isinstance(block, dict):
+                        btype = block.get("type", "")
+                        if btype == "text":
+                            parts.append(block.get("text", "")[:200])
+                        elif btype == "tool_use":
+                            parts.append(f"[tool_use: {block.get('name', '?')}]")
+                        elif btype == "tool_result":
+                            parts.append("[tool_result]")
+                        elif btype == "thinking":
+                            parts.append("[thinking]")
+                        else:
+                            parts.append(f"[{btype}]")
+                preview = " ".join(parts)[:300]
+                length = sum(
+                    len(b.get("text", "")) if isinstance(b, dict) else len(str(b))
+                    for b in content
+                )
+            else:
+                preview = str(content)[:300]
+                length = len(str(content))
+            messages_summary.append({
+                "role": role,
+                "preview": preview,
+                "content_length": length,
+            })
+
+        # Build compact request body for raw trace display
+        request_body_compact = _build_compact_request_body(body)
+
+        # Extract agent handoff data (Agent tool spawn/return)
+        if self.trace_format == "openclaw":
+            agent_handoffs: list[dict[str, Any]] = []
+        else:
+            agent_handoffs = _extract_agent_handoffs(raw_messages)
+
+        if self.trace_format == "openclaw":
+            prompt = build_prompt_structure_openclaw(
+                body,
+                strip_assistant_thinking=strip_assistant_thinking,
+            )
+        else:
+            prompt = build_prompt_structure(
+                body,
+                strip_assistant_thinking=strip_assistant_thinking,
+                strip_billing_header=self.strip_billing_header,
+            )
+        prompt_sections, token_ids = tokenize_prompt(prompt, trace_format=self.trace_format)
         input_tokens = len(token_ids)
 
         current_hashes = self.prefix_hasher.compute_chunk_hashes(token_ids)
@@ -674,7 +1173,7 @@ class SessionState:
         )
         prefix_tokens = prefix_chunk_count * self.chunk_size
 
-        matches = self.matcher.match_sub_sequence(token_ids)
+        matches = self.matcher.match_sub_sequence(token_ids, scan_start=prefix_tokens)
         selected_matches = _select_non_overlapping_matches(
             matches,
             prefix_token_count=prefix_tokens,
@@ -718,6 +1217,16 @@ class SessionState:
                 selected_matches=selected_matches,
                 token_ids=token_ids,
             ),
+            agent_type=agent_type,
+            agent_group_id=self._agent_group_counter,
+            model=model_name,
+            system_preview=system_preview,
+            tool_names=tool_names_list,
+            messages_summary=messages_summary,
+            request_body_compact=request_body_compact,
+            agent_handoffs=agent_handoffs,
+            timestamp_utc=req_timestamp_utc,
+            timestamp_rel_s=req_timestamp_rel_s,
             prompt_sections=prompt_sections,
             prompt_token_ids=token_ids,
             prompt_hashes=current_hashes,
@@ -755,10 +1264,16 @@ class SessionState:
         *,
         strip_assistant_thinking: bool,
     ) -> None:
-        response_sections = serialize_assistant_response_sections(
-            body,
-            strip_assistant_thinking=strip_assistant_thinking,
-        )
+        if self.trace_format == "openclaw":
+            response_sections = serialize_assistant_response_sections_openclaw(
+                body,
+                strip_assistant_thinking=strip_assistant_thinking,
+            )
+        else:
+            response_sections = serialize_assistant_response_sections(
+                body,
+                strip_assistant_thinking=strip_assistant_thinking,
+            )
         response_token_ids = tokenize_sections(response_sections)
         request_metrics.response_sections = response_sections
         request_metrics.response_token_ids = response_token_ids
@@ -767,6 +1282,10 @@ class SessionState:
             request_metrics.input_tokens_est + request_metrics.response_output_tokens_est
         )
         request_metrics.response_preview = _preview_text(response_sections)
+        if self.trace_format == "openclaw":
+            request_metrics.response_body_compact = _build_compact_response_body_openclaw(body)
+        else:
+            request_metrics.response_body_compact = _build_compact_response_body(body)
 
         if (
             self.cache_source_mode != CacheSourceMode.INCLUDE_DECODE_CACHE
@@ -864,6 +1383,30 @@ class SessionState:
             request.provider_output_tokens or 0 for request in self.requests
         )
 
+        # Build agent groups from request sequence
+        agent_groups: list[dict[str, Any]] = []
+        subagent_counter = 0
+        compact_counter = 0
+        for request in self.requests:
+            if not agent_groups or agent_groups[-1]["group_id"] != request.agent_group_id:
+                if request.agent_type == "subagent":
+                    subagent_counter += 1
+                    label = f"Subagent {subagent_counter}"
+                elif request.agent_type == "compact":
+                    compact_counter += 1
+                    label = f"Compact {compact_counter}"
+                elif request.agent_type == "no_tools":
+                    label = "No Tools"
+                else:
+                    label = request.agent_type.capitalize()
+                agent_groups.append({
+                    "group_id": request.agent_group_id,
+                    "agent_type": request.agent_type,
+                    "label": label,
+                    "request_indices": [],
+                })
+            agent_groups[-1]["request_indices"].append(request.request_index)
+
         return {
             "session_id": self.session_id,
             "request_count": len(self.requests),
@@ -885,6 +1428,7 @@ class SessionState:
             "provider_cache_read_input_tokens": provider_cache_read_tokens,
             "provider_cache_creation_input_tokens": provider_cache_creation_tokens,
             "provider_output_tokens": provider_output_tokens,
+            "agent_groups": agent_groups,
             "requests": [
                 request.to_dict(
                     include_prompt_token_ids=include_prompt_token_ids,
@@ -903,6 +1447,7 @@ def _summarize_sessions(
     cache_source_mode: CacheSourceMode,
     strip_assistant_thinking: bool,
     skipped_record_count: int,
+    trace_format: str = "claudecode",
 ) -> dict[str, Any]:
     combined_input = sum(item["input_tokens_est"] for item in session_summaries)
     combined_output = sum(item["response_output_tokens_est"] for item in session_summaries)
@@ -922,15 +1467,24 @@ def _summarize_sessions(
         "chunk_size": chunk_size,
         "cache_source_mode": cache_source_mode.value,
         "strip_assistant_thinking": strip_assistant_thinking,
-        "notes": [
-            "Only type=request records with path=/v1/messages are scored.",
-            "Prompt reconstruction uses Anthropic model-visible fields: tools, system, messages.",
-            "Top-level request metadata like model/max_tokens/stream is excluded from token counts.",
-            "Previous assistant thinking blocks are stripped by default.",
-            "Output tokens are counted in total tokens for both cache modes.",
-            "In include_decode_cache mode, assistant responses become future cache sources only after the response arrives.",
-            "Prefix/non-prefix/new-compute ratios are normalized by input tokens.",
-        ],
+        "trace_format": trace_format,
+        "notes": (
+            [
+                "Only type=request records with path=/v1/chat/completions are scored.",
+                "Prompt reconstruction uses OpenAI/OpenClaw format: messages (system is messages[0]).",
+                "Top-level request metadata like model/max_completion_tokens/stream is excluded from token counts.",
+                "Output tokens are counted in total tokens for both cache modes.",
+                "Prefix/non-prefix/new-compute ratios are normalized by input tokens.",
+            ] if trace_format == "openclaw" else [
+                "Only type=request records with path=/v1/messages are scored.",
+                "Prompt reconstruction uses Anthropic model-visible fields: tools, system, messages.",
+                "Top-level request metadata like model/max_tokens/stream is excluded from token counts.",
+                "Previous assistant thinking blocks are stripped by default.",
+                "Output tokens are counted in total tokens for both cache modes.",
+                "In include_decode_cache mode, assistant responses become future cache sources only after the response arrives.",
+                "Prefix/non-prefix/new-compute ratios are normalized by input tokens.",
+            ]
+        ),
         "session_count": len(session_summaries),
         "skipped_record_count": skipped_record_count,
         "combined": {
@@ -966,6 +1520,7 @@ def analyze_records_for_mode(
     strip_assistant_thinking: bool,
     cache_source_mode: CacheSourceMode,
     strip_billing_header: bool = True,
+    trace_format: str = "claudecode",
     log_each_entry: bool = False,
     include_prompt_token_ids: bool = False,
     include_prompt_text: bool = False,
@@ -975,13 +1530,19 @@ def analyze_records_for_mode(
     count_tokens_counts: dict[str, int] = {}
     skipped_record_count = 0
 
+    # Path matching depends on trace format
+    if trace_format == "openclaw":
+        inference_path = "/v1/chat/completions"
+    else:
+        inference_path = "/v1/messages"
+
     for line_number, record in records:
         record_type = record.get("type")
 
         if record_type == "request":
             path_name = record.get("path")
             session_id = _extract_session_id(record)
-            if path_name == "/v1/messages":
+            if path_name == inference_path:
                 session = sessions.setdefault(
                     session_id,
                     SessionState(
@@ -989,6 +1550,7 @@ def analyze_records_for_mode(
                         chunk_size=chunk_size,
                         cache_source_mode=cache_source_mode,
                         strip_billing_header=strip_billing_header,
+                        trace_format=trace_format,
                     ),
                 )
                 session.count_tokens_request_count += count_tokens_counts.pop(session_id, 0)
@@ -1029,14 +1591,36 @@ def analyze_records_for_mode(
             request_metrics = sessions[session_id].requests[request_position]
             usage = body.get("usage")
             if isinstance(usage, dict):
-                request_metrics.provider_input_tokens = usage.get("input_tokens")
-                request_metrics.provider_cache_read_input_tokens = usage.get(
-                    "cache_read_input_tokens"
-                )
-                request_metrics.provider_cache_creation_input_tokens = usage.get(
-                    "cache_creation_input_tokens"
-                )
-                request_metrics.provider_output_tokens = usage.get("output_tokens")
+                if trace_format == "openclaw":
+                    # OpenAI format: prompt_tokens / completion_tokens
+                    request_metrics.provider_input_tokens = usage.get("prompt_tokens")
+                    request_metrics.provider_output_tokens = usage.get("completion_tokens")
+                    # Cache metrics may be in a separate top-level field
+                    cache_metrics = body.get("cache_metrics", {})
+                    if isinstance(cache_metrics, dict):
+                        request_metrics.provider_cache_read_input_tokens = cache_metrics.get("cached_tokens")
+                else:
+                    # Anthropic format
+                    request_metrics.provider_input_tokens = usage.get("input_tokens")
+                    request_metrics.provider_cache_read_input_tokens = usage.get(
+                        "cache_read_input_tokens"
+                    )
+                    request_metrics.provider_cache_creation_input_tokens = usage.get(
+                        "cache_creation_input_tokens"
+                    )
+                    request_metrics.provider_output_tokens = usage.get("output_tokens")
+            # Extract response timestamps
+            resp_ts_utc = str(record.get("timestamp_utc", ""))
+            resp_ts_rel = record.get("timestamp_rel_s")
+            if resp_ts_rel is not None:
+                try:
+                    resp_ts_rel = float(resp_ts_rel)
+                except (ValueError, TypeError):
+                    resp_ts_rel = None
+            request_metrics.response_timestamp_utc = resp_ts_utc
+            request_metrics.response_timestamp_rel_s = resp_ts_rel
+            if request_metrics.timestamp_rel_s is not None and resp_ts_rel is not None:
+                request_metrics.duration_s = round(resp_ts_rel - request_metrics.timestamp_rel_s, 2)
             sessions[session_id].process_response(
                 request_metrics,
                 body,
@@ -1068,6 +1652,7 @@ def analyze_records_for_mode(
         cache_source_mode=cache_source_mode,
         strip_assistant_thinking=strip_assistant_thinking,
         skipped_record_count=skipped_record_count,
+        trace_format=trace_format,
     )
 
 
@@ -1097,12 +1682,15 @@ def analyze_trace_text(
     trace_label: str,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     strip_assistant_thinking: bool = True,
+    trace_format: str = "claudecode",
     log_each_entry: bool = False,
     include_prompt_token_ids: bool = False,
     include_prompt_text: bool = False,
 ) -> dict[str, Any]:
     records = _parse_jsonl_text(trace_text)
-    has_billing = _has_billing_headers(records)
+
+    # OpenClaw traces have no billing headers — skip that analysis path
+    has_billing = False if trace_format == "openclaw" else _has_billing_headers(records)
 
     # Primary modes: billing header stripped (best case / CLAUDE_CODE_ATTRIBUTION_HEADER=0)
     mode_summaries = {
@@ -1113,6 +1701,7 @@ def analyze_trace_text(
             strip_assistant_thinking=strip_assistant_thinking,
             cache_source_mode=mode,
             strip_billing_header=True,
+            trace_format=trace_format,
             log_each_entry=log_each_entry,
             include_prompt_token_ids=include_prompt_token_ids,
             include_prompt_text=include_prompt_text,
@@ -1131,6 +1720,7 @@ def analyze_trace_text(
                 strip_assistant_thinking=strip_assistant_thinking,
                 cache_source_mode=mode,
                 strip_billing_header=False,
+                trace_format=trace_format,
                 log_each_entry=log_each_entry,
                 include_prompt_token_ids=include_prompt_token_ids,
                 include_prompt_text=include_prompt_text,
@@ -1146,6 +1736,7 @@ def analyze_trace_text(
         "analysis_method": "offline_cacheblend_two_hash",
         "tokenizer": "tiktoken-o200k_base",
         "chunk_size": chunk_size,
+        "trace_format": trace_format,
         "strip_assistant_thinking": strip_assistant_thinking,
         "has_billing_headers": has_billing,
         "detected_sessions": detected_sessions,
@@ -1161,6 +1752,7 @@ def analyze_trace_path(
     *,
     chunk_size: int = DEFAULT_CHUNK_SIZE,
     strip_assistant_thinking: bool = True,
+    trace_format: str = "claudecode",
     log_each_entry: bool = False,
     include_prompt_token_ids: bool = False,
     include_prompt_text: bool = False,
@@ -1170,10 +1762,50 @@ def analyze_trace_path(
         trace_label=str(path.resolve()),
         chunk_size=chunk_size,
         strip_assistant_thinking=strip_assistant_thinking,
+        trace_format=trace_format,
         log_each_entry=log_each_entry,
         include_prompt_token_ids=include_prompt_token_ids,
         include_prompt_text=include_prompt_text,
     )
+
+
+def _strip_for_lightweight_html(analysis: dict[str, Any]) -> dict[str, Any]:
+    """Strip heavy fields for a lightweight HTML dashboard.
+
+    Removes raw-trace-tab data (messages_summary, compact bodies, previews),
+    and text from chunks — keeps only chunk position/kind/fingerprint metadata
+    needed for the visualization.
+    """
+    import copy
+    result = copy.deepcopy(analysis)
+
+    for mode_key in ("modes", "modes_with_billing_header"):
+        modes = result.get(mode_key)
+        if not isinstance(modes, dict):
+            continue
+        for mode_data in modes.values():
+            for session in mode_data.get("sessions", []):
+                for req in session.get("requests", []):
+                    # Raw trace tab data
+                    req.pop("messages_summary", None)
+                    req.pop("request_body_compact", None)
+                    req.pop("response_body_compact", None)
+                    req.pop("agent_handoffs", None)
+                    req.pop("prompt_preview", None)
+                    req.pop("response_preview", None)
+                    req.pop("system_preview", None)
+                    req.pop("tool_names", None)
+                    # Timeline-heavy fields are just small numbers, keep them
+
+                    # Strip text from chunks — keep position/kind/fingerprint only
+                    for chunk in req.get("chunks", []):
+                        chunk.pop("text_preview", None)
+                        chunk.pop("text_value", None)
+                    for chunk in req.get("aligned_full_chunks", []):
+                        chunk.pop("text_preview", None)
+                        chunk.pop("text_value", None)
+
+    return result
 
 
 def generate_html(analysis: dict[str, Any]) -> str:
@@ -1191,7 +1823,14 @@ def generate_html(analysis: dict[str, Any]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("trace_path", type=Path, help="Anthropic raw trace JSONL.")
+    parser.add_argument("trace_path", type=Path, help="Raw trace JSONL file.")
+    parser.add_argument(
+        "--format",
+        choices=["claudecode", "openclaw"],
+        default="claudecode",
+        dest="trace_format",
+        help="Trace format: 'claudecode' (Anthropic, default) or 'openclaw' (OpenAI/vLLM).",
+    )
     parser.add_argument(
         "--output",
         type=Path,
@@ -1208,7 +1847,7 @@ def main() -> int:
         "--chunk-size",
         type=int,
         default=DEFAULT_CHUNK_SIZE,
-        help="Chunk size in analysis tokens. Default: 256.",
+        help="Block size in analysis tokens. Default: 256.",
     )
     parser.add_argument(
         "--include-assistant-thinking",
@@ -1222,12 +1861,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    include_prompt_text = args.html is not None
+    # For openclaw, never embed full prompt text — sessions are too long
+    include_prompt_text = args.html is not None and args.trace_format != "openclaw"
 
     payload = analyze_trace_path(
         args.trace_path.resolve(),
         chunk_size=args.chunk_size,
         strip_assistant_thinking=not args.include_assistant_thinking,
+        trace_format=args.trace_format,
         log_each_entry=args.log_each_entry,
         include_prompt_text=include_prompt_text,
     )
@@ -1242,7 +1883,9 @@ def main() -> int:
     print(f"JSON: {output_path}")
 
     if args.html is not None:
-        html_content = generate_html(payload)
+        # For openclaw, strip heavy fields to keep HTML small
+        html_data = _strip_for_lightweight_html(payload) if args.trace_format == "openclaw" else payload
+        html_content = generate_html(html_data)
         html_path = args.html.resolve()
         html_path.write_text(html_content, encoding="utf-8")
         print(f"HTML: {html_path}")

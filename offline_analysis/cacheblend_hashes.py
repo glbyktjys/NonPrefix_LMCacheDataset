@@ -21,7 +21,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import hashlib
 import struct
-from typing import Dict, List, Sequence
+from typing import Dict, Iterable, List, Sequence
 
 
 DEFAULT_CHUNK_SIZE = 256
@@ -49,6 +49,7 @@ def storage_hash_id(storage_hash: bytes) -> str:
 
 
 # compute fingerprint at every possible starting position given a sequence of tokens id
+# search for matches
 def rolling_window_fingerprints(
     token_ids: Sequence[int],
     chunk_size: int = DEFAULT_CHUNK_SIZE,
@@ -74,7 +75,7 @@ def rolling_window_fingerprints(
         fingerprints.append(current)
     return fingerprints
 
-
+# insert into cache
 def chunk_fingerprints(
     token_ids: Sequence[int],
     chunk_size: int = DEFAULT_CHUNK_SIZE,
@@ -205,19 +206,33 @@ class BlendTokenRangeMatcher:
     def match_sub_sequence(
         self,
         token_ids: Sequence[int],
+        scan_start: int = 0,
     ) -> List[BlendMatchResult]:
-        if len(token_ids) < self.chunk_size or not self._chunk_storage_hashes:
+        """Find cached chunks that match content in token_ids.
+
+        Args:
+            token_ids: Full token sequence to scan.
+            scan_start: Start scanning from this token offset.  When the
+                caller already knows the prefix length, passing it here
+                avoids scanning the prefix region.  This prevents the
+                ``seen_hashes`` dedup from consuming a stored chunk on a
+                prefix-region hit and then blocking the same chunk's
+                legitimate match in the post-prefix region.
+        """
+        scan_tokens = token_ids[scan_start:]
+        if len(scan_tokens) < self.chunk_size or not self._chunk_storage_hashes:
             return []
 
-        rolling = rolling_window_fingerprints(token_ids, self.chunk_size, self.base)
+        rolling = rolling_window_fingerprints(scan_tokens, self.chunk_size, self.base)
         seen_hashes: set[bytes] = set()
         results: List[BlendMatchResult] = []
 
-        for query_start, fingerprint in enumerate(rolling):
+        for rel_start, fingerprint in enumerate(rolling):
             candidate_ids = self._fingerprint_to_chunk_ids.get(fingerprint)
             if not candidate_ids:
                 continue
 
+            query_start = rel_start + scan_start
             query_chunk = tuple(
                 int(token) for token in token_ids[query_start : query_start + self.chunk_size]
             )
@@ -268,3 +283,17 @@ class BlendTokenRangeMatcher:
 
         results.sort(key=lambda match: match.cur_st)
         return results
+
+    def remove_chunks(self, storage_hashes: Iterable[bytes]) -> None:
+        for storage_hash in storage_hashes:
+            compact_id = self._storage_hash_to_compact_id.get(storage_hash)
+            if compact_id is None:
+                continue
+            self._chunk_storage_hashes[compact_id] = None
+            self._chunk_tokens[compact_id] = None
+            self._chunk_fingerprints[compact_id] = None
+            self._chunk_source_request_indexes[compact_id] = None
+            self._chunk_first_seen_request_indexes[compact_id] = None
+            self._chunk_from_decode_cache[compact_id] = None
+            self._storage_hash_to_start.pop(storage_hash, None)
+            self._storage_hash_to_compact_id.pop(storage_hash, None)

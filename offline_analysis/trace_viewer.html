@@ -148,6 +148,127 @@
       color: #1d4ed8;
       border-radius: 999px;
     }
+    /* Agent handoff card */
+    .handoff-card {
+      margin: 6px 0;
+      padding: 10px 14px;
+      background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%);
+      border: 1px solid rgba(139,92,246,0.2);
+      border-radius: 10px;
+      font-size: 11px;
+      line-height: 1.6;
+    }
+    .handoff-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 3px 0;
+    }
+    .handoff-arrow {
+      font-size: 14px;
+      line-height: 1;
+      flex-shrink: 0;
+      width: 18px;
+      text-align: center;
+    }
+    .handoff-arrow.down { color: #7c3aed; }
+    .handoff-arrow.up { color: #059669; }
+    .handoff-label {
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+      min-width: 140px;
+    }
+    .handoff-desc {
+      color: var(--muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      flex: 1;
+      min-width: 0;
+    }
+    .handoff-size {
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    /* Compaction annotation */
+    .compaction-card {
+      margin: 6px 0;
+      padding: 8px 14px;
+      background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+      border: 1px solid rgba(234,88,12,0.2);
+      border-radius: 10px;
+      font-size: 11px;
+      color: #9a3412;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .compaction-card .compaction-icon { font-size: 14px; }
+    .compaction-card .compaction-stat { font-weight: 700; }
+    .compaction-card .compaction-detail { color: #c2410c; }
+    /* Agent group sections */
+    .agent-group {
+      margin-bottom: 4px;
+    }
+    .agent-group-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 14px;
+      cursor: pointer;
+      user-select: none;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      border-radius: 8px;
+    }
+    .agent-group-header:hover {
+      background: rgba(239,229,214,0.35);
+    }
+    .agent-group-header .arrow {
+      display: inline-block;
+      transition: transform 0.15s ease;
+      font-size: 11px;
+    }
+    .agent-group.collapsed .arrow {
+      transform: rotate(-90deg);
+    }
+    .agent-group.collapsed .agent-group-body {
+      display: none;
+    }
+    .agent-group-body {
+      padding-left: 0;
+    }
+    .agent-group-header .agent-badge {
+      display: inline-block;
+      padding: 1px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .agent-badge.subagent {
+      background: #ede9fe;
+      color: #6d28d9;
+      border: 1px solid rgba(109,40,217,0.18);
+    }
+    .agent-badge.compact {
+      background: #fff7ed;
+      color: #c2410c;
+      border: 1px solid rgba(194,65,12,0.18);
+    }
+    .agent-badge.no_tools {
+      background: #f0f9ff;
+      color: #0369a1;
+      border: 1px solid rgba(3,105,161,0.18);
+    }
+    .agent-group-header .agent-stats {
+      font-weight: 400;
+      font-size: 11px;
+      color: var(--muted);
+    }
     /* Trace rows */
     .trace-list { display: grid; gap: 10px; margin-bottom: 18px; }
     .trace-row {
@@ -360,6 +481,243 @@
     .billing-toggle.billing-on .switch-label { color: #92400e; }
     .billing-toggle.billing-on .switch-desc { color: #b45309; }
     @media (max-width: 1100px) { .trace-row { grid-template-columns: 1fr; } }
+
+    /* Tab bar */
+    .tab-bar {
+      display: flex;
+      gap: 0;
+      margin-bottom: 18px;
+      border-bottom: 2px solid var(--grid);
+    }
+    .tab-bar button {
+      padding: 10px 20px;
+      font: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--muted);
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-bar button:hover { color: var(--ink); }
+    .tab-bar button.active {
+      color: var(--ink);
+      border-bottom-color: var(--ink);
+    }
+    .tab-panel { display: none; }
+    .tab-panel.active { display: block; }
+
+    /* Raw Trace table */
+    .raw-trace-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .raw-trace-table th {
+      position: sticky;
+      top: 0;
+      background: var(--panel);
+      text-align: left;
+      padding: 8px 10px;
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      border-bottom: 2px solid var(--grid);
+      white-space: nowrap;
+    }
+    .raw-trace-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid var(--grid);
+      white-space: nowrap;
+    }
+    .raw-trace-table tr:hover td { background: rgba(239,229,214,0.25); }
+    .raw-trace-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .raw-trace-table .agent-cell { font-size: 11px; }
+    .raw-trace-scroll {
+      max-height: 70vh;
+      overflow-y: auto;
+      border-radius: 12px;
+    }
+    .raw-trace-row {
+      border-bottom: 1px solid var(--grid);
+    }
+    .raw-trace-row.expanded { background: rgba(255,248,235,0.3); }
+    .raw-trace-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 16px;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .raw-trace-header:hover { background: rgba(239,229,214,0.25); }
+    .raw-trace-header .req-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 22px;
+      padding: 0 6px;
+      border-radius: 4px;
+      background: #e8e0d4;
+      font-weight: 700;
+      font-size: 11px;
+      color: var(--ink);
+    }
+    .raw-trace-header .model-name { font-size: 12px; color: var(--ink); }
+    .raw-trace-header .stream-label { font-size: 11px; color: var(--muted); }
+    .raw-trace-header .stats {
+      display: flex;
+      gap: 12px;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+      color: var(--muted);
+      margin-left: auto;
+      white-space: nowrap;
+    }
+    .raw-trace-header .stats .val { font-weight: 600; color: var(--ink); }
+    .raw-trace-header .stats .stat-highlight { color: #0284c7; font-weight: 600; }
+    .raw-trace-detail {
+      display: none;
+      padding: 0 16px 16px 16px;
+    }
+    .raw-trace-row.expanded .raw-trace-detail { display: block; }
+    .raw-trace-section-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink);
+      margin: 16px 0 6px;
+      text-align: left;
+    }
+    .raw-trace-section-label:first-child { margin-top: 4px; }
+    .raw-trace-detail { text-align: left; }
+    .raw-trace-json {
+      background: #faf7f2;
+      border: 1px solid var(--grid);
+      border-radius: 6px;
+      padding: 12px 14px;
+      font-size: 11.5px;
+      line-height: 1.5;
+      overflow-x: auto;
+      white-space: pre;
+      word-break: break-word;
+      max-height: 500px;
+      overflow-y: auto;
+      color: var(--ink);
+      text-align: left;
+    }
+    .raw-trace-messages-toggle {
+      padding: 8px 0;
+      font-size: 12px;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      text-align: left;
+    }
+    .raw-trace-messages-toggle:hover { color: var(--ink); }
+    .raw-trace-msg {
+      padding: 8px 0;
+      border-bottom: 1px solid rgba(223,210,193,0.4);
+    }
+    .raw-trace-msg:last-child { border-bottom: none; }
+    .raw-trace-msg .msg-role {
+      font-weight: 700;
+      font-size: 11px;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+    .raw-trace-msg .msg-role.user { color: #0369a1; }
+    .raw-trace-msg .msg-role.assistant { color: #7c3aed; }
+    .raw-trace-msg .msg-preview {
+      font-size: 12px;
+      color: var(--ink);
+      white-space: pre-wrap;
+      word-break: break-word;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    /* Timeline */
+    .timeline-wrap {
+      overflow-x: auto;
+      padding: 16px 0;
+    }
+    .timeline-row {
+      display: flex;
+      align-items: center;
+      height: 32px;
+      margin-bottom: 4px;
+    }
+    .timeline-label {
+      width: 180px;
+      flex-shrink: 0;
+      font-size: 12px;
+      font-weight: 600;
+      padding-right: 12px;
+      text-align: right;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .timeline-track {
+      flex: 1;
+      height: 100%;
+      position: relative;
+      background: rgba(239,229,214,0.2);
+      border-radius: 4px;
+    }
+    .timeline-block {
+      position: absolute;
+      top: 4px;
+      bottom: 4px;
+      border-radius: 3px;
+      min-width: 3px;
+      cursor: default;
+    }
+    .timeline-block.main { background: #404040; }
+    .timeline-block.subagent { background: #a78bfa; }
+    .timeline-block.compact { background: #fb923c; }
+    .timeline-block.no_tools { background: #7dd3fc; }
+    .timeline-axis {
+      display: flex;
+      align-items: center;
+      height: 24px;
+      margin-bottom: 8px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+    .timeline-axis-track {
+      flex: 1;
+      position: relative;
+      height: 100%;
+    }
+    .timeline-tick {
+      position: absolute;
+      top: 0;
+      font-size: 10px;
+      color: var(--muted);
+      transform: translateX(-50%);
+      white-space: nowrap;
+    }
+    .timeline-legend {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .timeline-legend-dot {
+      display: inline-block;
+      width: 10px;
+      height: 10px;
+      border-radius: 2px;
+      margin-right: 4px;
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -406,17 +764,24 @@
       </div>
     </section>
 
-    <div id="selectionStrip" class="selection-strip hidden">
-      <span id="selectionLabel">0 text regions selected</span>
-      <button id="clearSelectionBtn">Clear</button>
+    <div id="tabBar" class="tab-bar hidden">
+      <button data-tab="flamegraph" class="active">Visualizer</button>
+      <button data-tab="raw-trace">Raw Trace</button>
+      <button data-tab="timeline">Timeline</button>
     </div>
 
-    <section id="traceSection" class="panel hidden">
-      <div id="traceList" class="trace-list"></div>
-      <div id="emptyState" class="empty">No trace data loaded.</div>
-    </section>
+    <div id="tabFlamegraph" class="tab-panel active">
+      <div id="selectionStrip" class="selection-strip hidden">
+        <span id="selectionLabel">0 text regions selected</span>
+        <button id="clearSelectionBtn">Clear</button>
+      </div>
 
-    <section id="detailSection" class="panel hidden">
+      <section id="traceSection" class="panel hidden">
+        <div id="traceList" class="trace-list"></div>
+        <div id="emptyState" class="empty">No trace data loaded.</div>
+      </section>
+
+      <section id="detailSection" class="panel hidden">
       <div class="detail">
         <div id="detailHeader" class="request-meta">
           <div class="main">Select a request row to inspect chunk details.</div>
@@ -425,7 +790,23 @@
         <div id="chunkTableWrap"></div>
       </div>
     </section>
-  </div>
+    </div><!-- /tabFlamegraph -->
+
+    <div id="tabRawTrace" class="tab-panel">
+      <section class="panel" style="padding:0;overflow:hidden">
+        <div id="rawTraceScroll" class="raw-trace-scroll">
+          <div id="rawTraceContent" class="empty" style="padding:18px">Select a session to view raw trace data.</div>
+        </div>
+      </section>
+    </div>
+
+    <div id="tabTimeline" class="tab-panel">
+      <section class="panel" style="padding:18px">
+        <div id="timelineContent">Select a session to view timeline.</div>
+      </section>
+    </div>
+
+  </div><!-- /app -->
 
   <script>
     // ── state ──────────────────────────────────────────────────────────────
@@ -436,6 +817,7 @@
       sessionId: null,
       selectedRequestIndex: null,
       selectedPatterns: [],
+      collapsedGroups: new Set(),
     };
 
     const el = {
@@ -459,10 +841,17 @@
       billingToggle:    document.getElementById("billingToggle"),
       billingSwitch:    document.getElementById("billingSwitch"),
       billingDesc:      document.getElementById("billingDesc"),
+      tabBar:           document.getElementById("tabBar"),
+      tabFlamegraph:    document.getElementById("tabFlamegraph"),
+      tabRawTrace:      document.getElementById("tabRawTrace"),
+      tabTimeline:      document.getElementById("tabTimeline"),
+      rawTraceContent:  document.getElementById("rawTraceContent"),
+      rawTraceScroll:   document.getElementById("rawTraceScroll"),
+      timelineContent:  document.getElementById("timelineContent"),
     };
 
     // ── visual-group pre-processing ────────────────────────────────────────
-    const MERGE_THRESHOLD_TOKENS = 256 * 6; // 1536 tokens
+    const MERGE_THRESHOLD_TOKENS = 256 * 1; // single chunk = 256 tokens
 
     function makePatternKey(fingerprintIds) {
       return fingerprintIds.join("|");
@@ -741,6 +1130,23 @@
     // ── formatting helpers ─────────────────────────────────────────────────
     function formatInt(v) { return Number(v || 0).toLocaleString(); }
     function formatPct(v) { return (Number(v || 0) * 100).toFixed(2) + "%"; }
+    function formatTimestamp(utc) {
+      if (!utc) return "";
+      // "2026-04-06T02:02:35.422136+00:00" → "02:02:35"
+      var m = utc.match(/T(\d{2}:\d{2}:\d{2})/);
+      return m ? m[1] : utc.substring(0, 19);
+    }
+    function formatDuration(s) {
+      if (s == null) return "";
+      if (s < 1) return (s * 1000).toFixed(0) + "ms";
+      if (s < 60) return s.toFixed(1) + "s";
+      return Math.floor(s / 60) + "m " + (s % 60).toFixed(0) + "s";
+    }
+    function formatRelTime(s) {
+      if (s == null) return "";
+      if (s < 60) return s.toFixed(1) + "s";
+      return Math.floor(s / 60) + "m " + Math.floor(s % 60) + "s";
+    }
     function escapeHtml(v) {
       return String(v == null ? "" : v)
         .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -858,19 +1264,18 @@
 
       if (patternSummaries.length === 1) {
         var s = patternSummaries[0];
-        var chunkWord = s.pattern.fingerprintIds.length === 1 ? "chunk" : "chunks";
         el.selectionLabel.textContent =
-          "Tracking " + s.pattern.fingerprintIds.length + " " + chunkWord + " from request " + s.pattern.originRequestIndex +
-          " \u00b7 " + formatInt(s.pattern.tokenCount) + " tokens" +
-          " \u00b7 " + s.turnCount + " request" + (s.turnCount === 1 ? "" : "s") + " matched" +
+          "Tracking " + formatInt(s.pattern.tokenCount) + " tokens (" + s.pattern.fingerprintIds.length + " fingerprint" + (s.pattern.fingerprintIds.length === 1 ? "" : "s") + ")" +
+          " from request " + s.pattern.originRequestIndex +
+          " \u00b7 reused in " + s.turnCount + " request" + (s.turnCount === 1 ? "" : "s") +
           " \u00b7 shift+click to add";
         return;
       }
 
       el.selectionLabel.textContent =
         "Tracking " + patternSummaries.length + " regions \u00b7 " +
-        totalTurns + " request matches \u00b7 " +
-        totalOccurrences + " chunk hits \u00b7 shift+click to add, click clear to reset";
+        "reused in " + totalTurns + " request" + (totalTurns === 1 ? "" : "s") + " \u00b7 " +
+        totalOccurrences + " matches \u00b7 shift+click to add, click clear to reset";
     }
 
     // ── renderTrace ────────────────────────────────────────────────────────
@@ -898,7 +1303,8 @@
 
       var selectionData = computeSelectionData(sessionData);
 
-      el.traceList.innerHTML = sessionData.requests.map(function(request) {
+      // Helper: render a single request row
+      function renderRequestRow(request, label) {
         var displayChunks = displayChunksForRequest(request);
         var groups = buildVisualGroups(displayChunks);
         var displayTokenTotal = displayChunks.reduce(function(sum, chunk) { return sum + chunk.token_count; }, 0);
@@ -908,20 +1314,15 @@
           occurrences: [],
         };
 
-        // Token count summary line
         var tokenSummary = formatInt(request.input_tokens_est) + " tokens";
-
-        // Bar proportional width
         var barWidthPct = displayTokenTotal > 0
           ? (displayTokenTotal / maxDisplayTokens) * 100
           : 0;
 
-        // Build segment spans from visual groups
         // Find the first non-prefix group index for chunk-level boundary marker
         var firstNonPrefixGroupIndex = -1;
         for (var gi = 0; gi < groups.length; gi++) {
           if (groups[gi].kind !== "prefix") {
-            // Only mark boundary if there is at least one prefix group before it
             if (gi > 0) firstNonPrefixGroupIndex = gi;
             break;
           }
@@ -935,7 +1336,6 @@
           if (group.from_decode_cache) classes.push("decode");
           if (groupIndex === firstNonPrefixGroupIndex) classes.push("prefix-boundary");
 
-          // Tooltip
           var kindLabel = group.kind === "prefix" ? "Prefix reuse"
             : group.kind === "nonprefix" ? "Non-prefix reuse" : "New compute";
           if (group.from_decode_cache) kindLabel += " (decode cache)";
@@ -949,7 +1349,6 @@
           return '<span class="' + classes.join(" ") + '" style="width:' + widthPct + '%;" title="' + escapeHtml(title) + '" data-group-index="' + groupIndex + '" data-request-index="' + request.request_index + '"></span>';
         }).join("");
 
-        // Selection overlay — position by display chunk token offset
         var numDisplayChunks = displayChunks.length;
         var overlayHtml = requestSelection.occurrences.map(function(occurrence) {
           var leftPct = numDisplayChunks > 0 ? (occurrence.displayChunkPos / numDisplayChunks) * 100 : 0;
@@ -963,15 +1362,18 @@
           return '<span class="' + hitClass + '" style="left:' + leftPct + '%;width:' + widthPct + '%;" title="' + escapeHtml(title) + '"></span>';
         }).join("");
 
-        // Match badge
         var matchBadge = requestSelection.patternIds.size
           ? ' <span class="badge" style="background:#ede9fe;color:#6d28d9;border-color:rgba(109,40,217,0.18)">' + escapeHtml(requestSelection.occurrences.length + " chunk" + (requestSelection.occurrences.length === 1 ? "" : "s")) + '</span>'
           : "";
 
+        var timeParts = [tokenSummary];
+        if (request.duration_s != null) timeParts.push(formatDuration(request.duration_s));
+        if (request.timestamp_rel_s != null) timeParts.push("@" + formatRelTime(request.timestamp_rel_s));
+
         return '<div class="trace-row ' + (request.request_index === state.selectedRequestIndex ? "selected" : "") + '" data-request-index="' + request.request_index + '">' +
           '<div class="request-meta">' +
-            '<div class="main">Request ' + request.request_index + matchBadge + '</div>' +
-            '<div class="sub">' + escapeHtml(tokenSummary) + '</div>' +
+            '<div class="main">' + escapeHtml(label) + matchBadge + '</div>' +
+            '<div class="sub">' + escapeHtml(timeParts.join(" \u00b7 ")) + '</div>' +
           '</div>' +
           '<div class="bar-wrap">' +
             '<div class="bar" style="' + (displayTokenTotal > 0 ? "width:" + barWidthPct + "%" : "width:56px;opacity:0.35") + '" data-request-index="' + request.request_index + '">' +
@@ -980,7 +1382,174 @@
             '</div>' +
           '</div>' +
         '</div>';
-      }).join("");
+      }
+
+      // Build request lookup by index
+      var requestByIndex = {};
+      for (var ri = 0; ri < sessionData.requests.length; ri++) {
+        requestByIndex[sessionData.requests[ri].request_index] = sessionData.requests[ri];
+      }
+
+      // Render with agent group structure
+      var agentGroups = sessionData.agent_groups;
+      var hasGroups = agentGroups && agentGroups.length > 0;
+
+      if (hasGroups) {
+        // Helper: find handoff data for transition into a non-main group.
+        // The first main request AFTER a non-main group has the handoff in its messages.
+        // We look at the first request of the next main group for agent_handoffs.
+        function findHandoffForGroup(groupIndex) {
+          // Find the next main group after this non-main group
+          for (var ni = groupIndex + 1; ni < agentGroups.length; ni++) {
+            if (agentGroups[ni].agent_type === "main") {
+              var firstReqIdx = agentGroups[ni].request_indices[0];
+              var firstReq = requestByIndex[firstReqIdx];
+              if (firstReq && firstReq.agent_handoffs && firstReq.agent_handoffs.length > 0) {
+                return firstReq.agent_handoffs[0];
+              }
+              break;
+            }
+          }
+          return null;
+        }
+
+        // Helper: compute compaction context reduction
+        function getCompactionStats(groupIndex) {
+          var group = agentGroups[groupIndex];
+          if (group.agent_type !== "compact") return null;
+          // Find last main request before this compact group
+          var beforeTokens = null;
+          for (var pi = groupIndex - 1; pi >= 0; pi--) {
+            if (agentGroups[pi].agent_type === "main") {
+              var lastIdx = agentGroups[pi].request_indices[agentGroups[pi].request_indices.length - 1];
+              var lastReq = requestByIndex[lastIdx];
+              if (lastReq) beforeTokens = lastReq.input_tokens_est;
+              break;
+            }
+          }
+          // Find first main request after this compact group
+          var afterTokens = null;
+          for (var ni = groupIndex + 1; ni < agentGroups.length; ni++) {
+            if (agentGroups[ni].agent_type === "main") {
+              var firstIdx = agentGroups[ni].request_indices[0];
+              var firstReq = requestByIndex[firstIdx];
+              if (firstReq) afterTokens = firstReq.input_tokens_est;
+              break;
+            }
+          }
+          if (beforeTokens && afterTokens) {
+            var reduction = 1 - (afterTokens / beforeTokens);
+            return { before: beforeTokens, after: afterTokens, reduction: reduction };
+          }
+          return null;
+        }
+
+        var htmlParts = [];
+        for (var ag = 0; ag < agentGroups.length; ag++) {
+          var group = agentGroups[ag];
+          var isMain = group.agent_type === "main";
+          var isNonMain = !isMain;
+
+          if (isNonMain) {
+            // Insert handoff card BEFORE subagent groups
+            if (group.agent_type === "subagent") {
+              var handoff = findHandoffForGroup(ag);
+              if (handoff) {
+                htmlParts.push(
+                  '<div class="handoff-card">' +
+                    '<div class="handoff-row">' +
+                      '<span class="handoff-arrow down">\u2193</span>' +
+                      '<span class="handoff-label">Main \u2192 ' + escapeHtml(group.label) + '</span>' +
+                      '<span class="handoff-desc">"' + escapeHtml(handoff.prompt_preview.substring(0, 120)) + (handoff.prompt_length > 120 ? '\u2026' : '') + '"</span>' +
+                      '<span class="handoff-size">' + formatInt(handoff.prompt_length) + ' chars</span>' +
+                    '</div>' +
+                    '<div class="handoff-row">' +
+                      '<span class="handoff-arrow up">\u2191</span>' +
+                      '<span class="handoff-label">' + escapeHtml(group.label) + ' \u2192 Main</span>' +
+                      '<span class="handoff-desc">"' + escapeHtml(handoff.result_preview.substring(0, 120)) + (handoff.result_length > 120 ? '\u2026' : '') + '"</span>' +
+                      '<span class="handoff-size">' + formatInt(handoff.result_length) + ' chars</span>' +
+                    '</div>' +
+                  '</div>'
+                );
+              }
+            }
+
+            // Collapsible section for subagent/compact/no_tools groups
+            var badgeClass = group.agent_type;
+            var groupTokens = 0;
+            for (var gri = 0; gri < group.request_indices.length; gri++) {
+              var req = requestByIndex[group.request_indices[gri]];
+              if (req) groupTokens += req.input_tokens_est;
+            }
+            var statsText = group.request_indices.length + " req" + (group.request_indices.length === 1 ? "" : "s") + " \u00b7 " + formatInt(groupTokens) + " tokens";
+
+            var isCollapsed = state.collapsedGroups.has(group.group_id);
+            htmlParts.push(
+              '<div class="agent-group' + (isCollapsed ? " collapsed" : "") + '" data-agent-type="' + escapeHtml(group.agent_type) + '" data-group-id="' + group.group_id + '">' +
+                '<div class="agent-group-header">' +
+                  '<span class="arrow">\u25BC</span>' +
+                  '<span class="agent-badge ' + escapeHtml(badgeClass) + '">' + escapeHtml(group.label) + '</span>' +
+                  '<span class="agent-stats">' + escapeHtml(statsText) + '</span>' +
+                '</div>' +
+                '<div class="agent-group-body">'
+            );
+
+            for (var gri = 0; gri < group.request_indices.length; gri++) {
+              var req = requestByIndex[group.request_indices[gri]];
+              if (req) {
+                htmlParts.push(renderRequestRow(req, "Request " + req.request_index));
+              }
+            }
+
+            htmlParts.push('</div></div>');
+
+            // Insert compaction annotation AFTER compact groups
+            if (group.agent_type === "compact") {
+              var cstats = getCompactionStats(ag);
+              if (cstats) {
+                htmlParts.push(
+                  '<div class="compaction-card">' +
+                    '<span class="compaction-icon">\u21BB</span>' +
+                    '<span>Compacted: <span class="compaction-stat">' + formatInt(cstats.before) + '</span> \u2192 <span class="compaction-stat">' + formatInt(cstats.after) + '</span> tokens</span>' +
+                    '<span class="compaction-detail">(' + Math.round(cstats.reduction * 100) + '% reduction)</span>' +
+                  '</div>'
+                );
+              }
+            }
+          } else {
+            // Main agent requests rendered at top level
+            for (var gri = 0; gri < group.request_indices.length; gri++) {
+              var req = requestByIndex[group.request_indices[gri]];
+              if (req) {
+                htmlParts.push(renderRequestRow(req, "Request " + req.request_index));
+              }
+            }
+          }
+        }
+        el.traceList.innerHTML = htmlParts.join("");
+      } else {
+        // Fallback: no agent groups — flat list as before
+        el.traceList.innerHTML = sessionData.requests.map(function(request) {
+          return renderRequestRow(request, "Request " + request.request_index);
+        }).join("");
+      }
+
+      // Agent group header click -> collapse/expand
+      var groupHeaders = el.traceList.querySelectorAll(".agent-group-header");
+      for (var i = 0; i < groupHeaders.length; i++) {
+        (function(header) {
+          header.addEventListener("click", function(e) {
+            var groupEl = header.parentElement;
+            var groupId = Number(groupEl.dataset.groupId);
+            groupEl.classList.toggle("collapsed");
+            if (groupEl.classList.contains("collapsed")) {
+              state.collapsedGroups.add(groupId);
+            } else {
+              state.collapsedGroups.delete(groupId);
+            }
+          });
+        })(groupHeaders[i]);
+      }
 
       // Row click -> select request
       var rows = el.traceList.querySelectorAll(".trace-row");
@@ -1056,12 +1625,11 @@
 
         // Tracking header
         var trackingPattern = state.selectedPatterns[0];
-        var chunkWord = trackingPattern.fingerprintIds.length === 1 ? "chunk" : "chunks";
         el.detailHeader.innerHTML =
-          '<div class="main">Chunk Tracking</div>' +
-          '<div class="sub">' + trackingPattern.fingerprintIds.length + ' ' + chunkWord +
-            ' selected from request ' + trackingPattern.originRequestIndex +
-            ' \u00b7 ' + formatInt(trackingPattern.tokenCount) + ' tokens' +
+          '<div class="main">Token Reuse Tracking</div>' +
+          '<div class="sub">' + formatInt(trackingPattern.tokenCount) + ' tokens' +
+            ' (' + trackingPattern.fingerprintIds.length + ' fingerprint' + (trackingPattern.fingerprintIds.length === 1 ? '' : 's') + ')' +
+            ' from request ' + trackingPattern.originRequestIndex +
             (trackingPattern.originKind ? ' \u00b7 ' + trackingPattern.originKind : '') +
           '</div>';
 
@@ -1098,7 +1666,7 @@
         el.chunkTableWrap.innerHTML =
           '<table class="chunk-table">' +
             '<thead><tr>' +
-              '<th>Selected Chunk</th><th>Appears In</th><th>Token Range</th><th>Reuse Type</th>' +
+              '<th>Origin</th><th>Reused In</th><th>Token Range</th><th>Reuse Type</th>' +
             '</tr></thead>' +
             '<tbody>' + occurrenceTableRows + '</tbody>' +
           '</table>';
@@ -1110,8 +1678,12 @@
       var decodeNPTokens = decodeNPChunks.reduce(function(s, c) { return s + c.token_count; }, 0);
 
       var requestIdLabel = request.request_id ? ' \u00b7 id: ' + request.request_id : '';
+      var agentTypeBadge = '';
+      if (request.agent_type && request.agent_type !== 'main') {
+        agentTypeBadge = ' <span class="agent-badge ' + escapeHtml(request.agent_type) + '">' + escapeHtml(request.agent_type) + '</span>';
+      }
       el.detailHeader.innerHTML =
-        '<div class="main">Request ' + request.request_index + '</div>' +
+        '<div class="main">Request ' + request.request_index + agentTypeBadge + '</div>' +
         '<div class="sub">' + formatInt(request.input_tokens_est) + ' input tokens \u00b7 ' + formatInt(request.response_output_tokens_est) + ' output tokens' + escapeHtml(requestIdLabel) + '</div>';
 
       var npSub = formatPct(request.nonprefix_reusable_tokens_est / (request.input_tokens_est || 1)) + " of input";
@@ -1166,11 +1738,15 @@
     // ── renderAll ──────────────────────────────────────────────────────────
     function renderAll() {
       if (!state.analysis) return;
+      el.tabBar.classList.remove("hidden");
       renderBillingToggle();
       renderSessions();
       renderSummary();
       renderSelectionStrip();
       renderTrace();
+      // Render active non-flamegraph tab
+      if (state.activeTab === "raw-trace") renderRawTrace();
+      if (state.activeTab === "timeline") renderTimeline();
     }
 
     // ── event listeners ────────────────────────────────────────────────────
@@ -1232,6 +1808,333 @@
         el.billingToggle.classList.remove("billing-on");
         el.billingDesc.textContent = "OFF \u2014 billing header present, prefix breaks every turn";
       }
+    }
+
+    // ── Tab switching ───────────────────────────────────────────────────────
+    var tabPanels = {
+      "flamegraph": el.tabFlamegraph,
+      "raw-trace":  el.tabRawTrace,
+      "timeline":   el.tabTimeline,
+    };
+    state.activeTab = "flamegraph";
+
+    el.tabBar.addEventListener("click", function(e) {
+      var btn = e.target.closest("button[data-tab]");
+      if (!btn) return;
+      var tab = btn.dataset.tab;
+      state.activeTab = tab;
+      // Update button states
+      var buttons = el.tabBar.querySelectorAll("button");
+      for (var i = 0; i < buttons.length; i++) buttons[i].classList.toggle("active", buttons[i].dataset.tab === tab);
+      // Show/hide panels
+      for (var key in tabPanels) {
+        tabPanels[key].classList.toggle("active", key === tab);
+      }
+      // Render the selected tab content
+      if (tab === "raw-trace") renderRawTrace();
+      if (tab === "timeline") renderTimeline();
+    });
+
+    // ── Raw Trace tab ─────────────────────────────────────────────────────
+    function renderRawTrace() {
+      var sessionData = currentSessionData();
+      if (!sessionData || !sessionData.requests || !sessionData.requests.length) {
+        el.rawTraceContent.className = "empty";
+        el.rawTraceContent.style.padding = "18px";
+        el.rawTraceContent.innerHTML = 'No requests in this session.';
+        return;
+      }
+
+      var rows = sessionData.requests.map(function(r) {
+        var agentBadge = r.agent_type && r.agent_type !== "main"
+          ? ' <span class="agent-badge ' + escapeHtml(r.agent_type) + '" style="font-size:10px">' + escapeHtml(r.agent_type) + '</span>'
+          : '';
+        var modelLabel = r.model ? escapeHtml(r.model) : '';
+        var isStream = (r.request_body_compact && r.request_body_compact.stream) ? "stream" : "";
+
+        // Stats line (right-aligned) — matches ProxyTrace format
+        var statsItems = [];
+        if (r.provider_input_tokens != null) statsItems.push('<span class="val">' + formatInt(r.provider_input_tokens) + '</span> in');
+        else statsItems.push('<span class="val">' + formatInt(r.input_tokens_est) + '</span> in');
+
+        if (r.provider_cache_read_input_tokens != null)
+          statsItems.push('<span class="val">' + formatInt(r.provider_cache_read_input_tokens) + '</span> cache_read');
+        if (r.provider_cache_creation_input_tokens != null)
+          statsItems.push('<span class="val">' + formatInt(r.provider_cache_creation_input_tokens) + '</span> cache_write');
+        if (r.provider_output_tokens != null)
+          statsItems.push('<span class="val">' + formatInt(r.provider_output_tokens) + '</span> out');
+        else
+          statsItems.push('<span class="val">' + formatInt(r.response_output_tokens_est) + '</span> out');
+
+        statsItems.push('<span class="stat-highlight">' + formatInt(r.input_tokens_est) + ' input tok</span>');
+        var statsHtml = statsItems.map(function(s) { return '<span>' + s + '</span>'; }).join('');
+
+        // Request Body JSON
+        var reqBody = r.request_body_compact || {};
+        var reqBodyJson = JSON.stringify(reqBody, null, 4);
+
+        // Messages section (collapsed by default)
+        var msgs = r.messages_summary || [];
+        var messagesHtml = '';
+        if (msgs.length > 0) {
+          messagesHtml =
+            '<div class="raw-trace-messages-toggle" data-messages-toggle="' + r.request_index + '">' +
+              msgs.length + ' messages (collapsed)' +
+            '</div>' +
+            '<div class="raw-trace-messages-body" data-messages-body="' + r.request_index + '" style="display:none">';
+          for (var mi = 0; mi < msgs.length; mi++) {
+            var m = msgs[mi];
+            messagesHtml += '<div class="raw-trace-msg">' +
+              '<div class="msg-role ' + escapeHtml(m.role) + '">' + escapeHtml(m.role) +
+              ' <span style="font-weight:400;color:var(--muted)">(' + formatInt(m.content_length) + ' chars)</span></div>' +
+              '<div class="msg-preview">' + escapeHtml(m.preview) + (m.content_length > 300 ? '\u2026' : '') + '</div>' +
+            '</div>';
+          }
+          messagesHtml += '</div>';
+        }
+
+        // Response Body JSON
+        var respBody = r.response_body_compact || {};
+        var hasRespBody = respBody && Object.keys(respBody).length > 0;
+        var respBodyJson = hasRespBody ? JSON.stringify(respBody, null, 4) : '';
+
+        var timeLabel = '';
+        if (r.duration_s != null) timeLabel += formatDuration(r.duration_s);
+        if (r.timestamp_utc) timeLabel += (timeLabel ? ' \u00b7 ' : '') + formatTimestamp(r.timestamp_utc);
+
+        return '<div class="raw-trace-row" data-request-index="' + r.request_index + '">' +
+          '<div class="raw-trace-header">' +
+            '<span class="req-badge">' + r.request_index + '</span>' +
+            agentBadge +
+            '<span class="model-name">' + modelLabel + '</span>' +
+            (isStream ? '<span class="stream-label">' + isStream + '</span>' : '') +
+            (timeLabel ? '<span class="stream-label">' + timeLabel + '</span>' : '') +
+            '<span class="stats">' + statsHtml + '</span>' +
+          '</div>' +
+          '<div class="raw-trace-detail">' +
+            '<div class="raw-trace-section-label">Request Body</div>' +
+            '<pre class="raw-trace-json">' + escapeHtml(reqBodyJson) + '</pre>' +
+            messagesHtml +
+            (hasRespBody
+              ? '<div class="raw-trace-section-label">Response Body</div>' +
+                '<pre class="raw-trace-json">' + escapeHtml(respBodyJson) + '</pre>'
+              : '') +
+          '</div>' +
+        '</div>';
+      });
+
+      el.rawTraceContent.className = "";
+      el.rawTraceContent.style.padding = "0";
+      el.rawTraceContent.innerHTML = rows.join("");
+
+      // Click header to expand/collapse
+      var rawRows = el.rawTraceContent.querySelectorAll(".raw-trace-row");
+      for (var i = 0; i < rawRows.length; i++) {
+        (function(row) {
+          row.querySelector(".raw-trace-header").addEventListener("click", function() {
+            row.classList.toggle("expanded");
+          });
+        })(rawRows[i]);
+      }
+
+      // Click messages toggle to expand/collapse messages
+      var msgToggles = el.rawTraceContent.querySelectorAll(".raw-trace-messages-toggle");
+      for (var i = 0; i < msgToggles.length; i++) {
+        (function(toggle) {
+          toggle.addEventListener("click", function(e) {
+            e.stopPropagation();
+            var reqIdx = toggle.dataset.messagesToggle;
+            var body = el.rawTraceContent.querySelector('[data-messages-body="' + reqIdx + '"]');
+            if (body) {
+              var isHidden = body.style.display === "none";
+              body.style.display = isHidden ? "block" : "none";
+              toggle.textContent = isHidden
+                ? (body.children.length + ' messages (expanded)')
+                : (body.children.length + ' messages (collapsed)');
+            }
+          });
+        })(msgToggles[i]);
+      }
+    }
+
+    // Navigate to a specific request in Raw Trace tab
+    function showRawTraceRequest(requestIndex) {
+      // Switch to raw-trace tab
+      state.activeTab = "raw-trace";
+      var buttons = el.tabBar.querySelectorAll("button");
+      for (var i = 0; i < buttons.length; i++) buttons[i].classList.toggle("active", buttons[i].dataset.tab === "raw-trace");
+      for (var key in tabPanels) tabPanels[key].classList.toggle("active", key === "raw-trace");
+      renderRawTrace();
+      // Expand and scroll to the target row
+      var targetRow = el.rawTraceContent.querySelector('.raw-trace-row[data-request-index="' + requestIndex + '"]');
+      if (targetRow) {
+        targetRow.classList.add("expanded");
+        targetRow.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+    }
+
+    // ── Timeline tab ──────────────────────────────────────────────────────
+    function renderTimeline() {
+      var sessionData = currentSessionData();
+      if (!sessionData || !sessionData.requests || !sessionData.requests.length) {
+        el.timelineContent.innerHTML = 'No requests in this session.';
+        return;
+      }
+
+      var agentGroups = sessionData.agent_groups;
+      if (!agentGroups || !agentGroups.length) {
+        // Fallback: single group with all requests
+        agentGroups = [{ group_id: 0, agent_type: "main", label: "Main", request_indices: sessionData.requests.map(function(r) { return r.request_index; }) }];
+      }
+
+      // Build request lookup
+      var reqMap = {};
+      var totalTokens = 0;
+      for (var i = 0; i < sessionData.requests.length; i++) {
+        var r = sessionData.requests[i];
+        reqMap[r.request_index] = r;
+        totalTokens += r.input_tokens_est;
+      }
+
+      // Compute cumulative token positions for each request
+      var cumTokens = {};
+      var running = 0;
+      for (var i = 0; i < sessionData.requests.length; i++) {
+        var r = sessionData.requests[i];
+        cumTokens[r.request_index] = { start: running, end: running + r.input_tokens_est };
+        running += r.input_tokens_est;
+      }
+
+      // Legend
+      var agentTypes = {};
+      for (var i = 0; i < agentGroups.length; i++) agentTypes[agentGroups[i].agent_type] = true;
+      var legendColors = { main: "#404040", subagent: "#a78bfa", compact: "#fb923c", no_tools: "#7dd3fc" };
+      var legendLabels = { main: "Main", subagent: "Subagent", compact: "Compact", no_tools: "No Tools" };
+      var legendHtml = '<div class="timeline-legend">';
+      for (var t in agentTypes) {
+        legendHtml += '<span><span class="timeline-legend-dot" style="background:' + (legendColors[t] || "#999") + '"></span>' + (legendLabels[t] || t) + '</span>';
+      }
+      legendHtml += '</div>';
+
+      // Axis ticks
+      var numTicks = 6;
+      var axisHtml = '<div class="timeline-axis"><div class="timeline-label" style="font-size:10px;color:var(--muted)">AGENT</div><div class="timeline-axis-track">';
+      for (var ti = 0; ti <= numTicks; ti++) {
+        var pct = (ti / numTicks) * 100;
+        var tokenVal = Math.round((ti / numTicks) * totalTokens);
+        var label = tokenVal >= 1000000 ? (tokenVal / 1000000).toFixed(1) + "M"
+          : tokenVal >= 1000 ? (tokenVal / 1000).toFixed(0) + "K"
+          : tokenVal.toString();
+        axisHtml += '<span class="timeline-tick" style="left:' + pct + '%">' + label + '</span>';
+      }
+      axisHtml += '</div></div>';
+
+      // Build timeline rows: merge "main" groups into one row (single continuous agent),
+      // but keep each subagent/compact/no_tools instance as its own row (separate context windows).
+      var timelineRows = [];  // { key, label, atype, request_indices }
+      var mainRow = null;
+      for (var gi = 0; gi < agentGroups.length; gi++) {
+        var group = agentGroups[gi];
+        var atype = group.agent_type;
+        if (atype === "main") {
+          if (!mainRow) {
+            mainRow = { key: "main", label: "Main", atype: "main", request_indices: [] };
+            timelineRows.push(mainRow);
+          }
+          for (var ri = 0; ri < group.request_indices.length; ri++) {
+            mainRow.request_indices.push(group.request_indices[ri]);
+          }
+        } else {
+          // Each non-main group is a distinct instance → its own row
+          timelineRows.push({
+            key: atype + "_" + group.group_id,
+            label: group.label,
+            atype: atype,
+            request_indices: group.request_indices.slice()
+          });
+        }
+      }
+
+      // Rows
+      var rowsHtml = '';
+      for (var mi = 0; mi < timelineRows.length; mi++) {
+        var row = timelineRows[mi];
+        var reqCount = row.request_indices.length;
+        var labelText = row.label + '  (' + reqCount + ' request' + (reqCount === 1 ? '' : 's') + ')';
+
+        var blocksHtml = '';
+        for (var ri = 0; ri < row.request_indices.length; ri++) {
+          var reqIdx = row.request_indices[ri];
+          var pos = cumTokens[reqIdx];
+          if (!pos) continue;
+          var leftPct = totalTokens > 0 ? (pos.start / totalTokens) * 100 : 0;
+          var widthPct = totalTokens > 0 ? (Math.max(pos.end - pos.start, 1) / totalTokens) * 100 : 0;
+          var req = reqMap[reqIdx];
+          var tooltip = "req " + reqIdx + " \u00b7 " + formatInt(req.input_tokens_est) + " tokens \u00b7 prefix " + formatPct(req.prefix_ratio_est) + (req.duration_s != null ? " \u00b7 " + formatDuration(req.duration_s) : "") + " \u00b7 click for details";
+          blocksHtml += '<div class="timeline-block ' + escapeHtml(row.atype) + '" style="left:' + leftPct + '%;width:' + Math.max(widthPct, 0.15) + '%;cursor:pointer" data-request-index="' + reqIdx + '" title="' + escapeHtml(tooltip) + '"></div>';
+        }
+
+        rowsHtml += '<div class="timeline-row">' +
+          '<div class="timeline-label">' + escapeHtml(labelText) + '</div>' +
+          '<div class="timeline-track">' + blocksHtml + '</div>' +
+        '</div>';
+      }
+
+      // Popup element for block click
+      var popupHtml = '<div id="timelinePopup" style="display:none;position:fixed;z-index:100;background:var(--panel);border:1px solid var(--grid);border-radius:10px;box-shadow:0 8px 24px rgba(34,29,23,0.15);padding:14px 16px;font-size:12px;max-width:340px"></div>';
+
+      el.timelineContent.innerHTML = legendHtml + axisHtml + rowsHtml + popupHtml;
+
+      // Block click handler
+      var blocks = el.timelineContent.querySelectorAll(".timeline-block");
+      var popup = document.getElementById("timelinePopup");
+      for (var bi = 0; bi < blocks.length; bi++) {
+        (function(block) {
+          block.addEventListener("click", function(e) {
+            e.stopPropagation();
+            var reqIdx = Number(block.dataset.requestIndex);
+            var req = reqMap[reqIdx];
+            if (!req) return;
+
+            var agentBadge = req.agent_type && req.agent_type !== "main"
+              ? '<span class="agent-badge ' + escapeHtml(req.agent_type) + '" style="font-size:10px">' + escapeHtml(req.agent_type) + '</span> '
+              : '';
+
+            popup.innerHTML =
+              '<div style="font-weight:700;font-size:14px;margin-bottom:6px">Request ' + req.request_index + ' ' + agentBadge + '</div>' +
+              '<div style="color:var(--muted);margin-bottom:4px">' + escapeHtml(req.model || '') + '</div>' +
+              '<div style="font-variant-numeric:tabular-nums;line-height:1.8">' +
+                'Input: <strong>' + formatInt(req.input_tokens_est) + '</strong> tokens<br>' +
+                'Prefix: <strong style="color:var(--prefix)">' + formatInt(req.prefix_tokens_est) + '</strong> (' + formatPct(req.prefix_ratio_est) + ')<br>' +
+                'Non-prefix: <strong style="color:var(--nonprefix)">' + formatInt(req.nonprefix_reusable_tokens_est) + '</strong> (' + formatPct(req.nonprefix_reuse_ratio_est) + ')<br>' +
+                'New: <strong>' + formatInt(req.new_compute_tokens_est) + '</strong> (' + formatPct(req.new_compute_ratio_est) + ')<br>' +
+                'Output: <strong>' + formatInt(req.response_output_tokens_est) + '</strong><br>' +
+                (req.duration_s != null ? 'Duration: <strong>' + formatDuration(req.duration_s) + '</strong>' + (req.timestamp_utc ? ' @ ' + formatTimestamp(req.timestamp_utc) : '') : '') +
+              '</div>' +
+              '<div style="margin-top:8px"><a href="#" style="color:#0369a1;font-size:11px" data-goto-raw="' + req.request_index + '">View in Raw Trace \u2192</a></div>';
+
+            popup.style.display = "block";
+            var rect = block.getBoundingClientRect();
+            popup.style.left = Math.min(rect.right + 8, window.innerWidth - 360) + "px";
+            popup.style.top = Math.max(rect.top - 40, 8) + "px";
+          });
+        })(blocks[bi]);
+      }
+
+      // Link click inside popup -> navigate to raw trace
+      el.timelineContent.addEventListener("click", function(e) {
+        var link = e.target.closest("a[data-goto-raw]");
+        if (link) {
+          e.preventDefault();
+          popup.style.display = "none";
+          showRawTraceRequest(Number(link.dataset.gotoRaw));
+        }
+      });
+
+      // Dismiss popup on outside click
+      document.addEventListener("click", function() {
+        if (popup) popup.style.display = "none";
+      });
     }
 
     // ── auto-initialize from embedded data ─────────────────────────────────

@@ -165,7 +165,7 @@ Recommended turn structure:
 
 Questions asked in claude code:
 - Turn 1:
-Read the full `lmcache/integration/vllm/vllm_v1_adapter.py` file end to end and explain how `build_connector_meta` fits into the decode/save_decode_cache flow. Cite 5 function names from different parts of the file.
+Read the full `lmcache/` file end to end and explain how `build_connector_meta` fits into the decode/save_decode_cache flow. Cite 5 function names from different parts of the file.
 
 - Turn 2:
 Could you please help to inspect PR #2929: https://github.com/LMCache/LMCache/pull/2929
