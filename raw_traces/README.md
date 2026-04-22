@@ -1,6 +1,6 @@
 # Raw Traces
 
-Exploratory traces collected while investigating what kinds of workloads produce non-prefix KV cache reuse. These are the experiments that led to the final dataset in `shuffle_mtRag/`.
+Exploratory traces collected while investigating what kinds of workloads produce non-prefix KV cache reuse. These are the experiments that led to the final dataset in `non_prefix_raw_traces/mtRag/`.
 
 ## Summary
 
@@ -13,7 +13,7 @@ Exploratory traces collected while investigating what kinds of workloads produce
 | `mtRag_on_OpenClaw/` (fiqa) | 1 | 186 | 0.8% | Small docs + single session |
 | `mtRag_on_OpenClaw/` (govt) | 1 | 244 | 7.0% | Frequent compaction helped |
 | `repo_on_OpenClaw/` | 12 | 1,299 | 0.4% | Claude Code on LMCache repo via OpenClaw |
-| **`shuffle_mtRag/`** | **110** | **943** | **14.2%** | **Multi-session MT-RAG with randomized doc order** |
+| **`non_prefix_raw_traces/mtRag/`** | **110** | **943** | **14.2%** | **Multi-session MT-RAG with randomized doc order** |
 
 ### What drives non-prefix reuse
 
@@ -50,6 +50,6 @@ Cloud and govt show higher non-prefix because they triggered more compaction epi
 
 Claude Code working on the LMCache repository through OpenClaw, split into 12 topical sessions. 1,299 total requests, 71.8M input tokens. Overall: pfx=96.4%, **np=0.4%**. Same prefix-append pattern as direct Claude Code -- OpenClaw's conversation accumulation doesn't create position shifts.
 
-## OpenClaw/
+## test_OpenClaw/
 
-Manual OpenClaw conversations (TSLA 10-K, repeated-question tests, inline RAG experiments). Small-scale exploratory traces, not systematically analyzed.
+Manual OpenClaw conversations (TSLA 10-K, repeated-question tests, inline RAG experiments, resume/compaction tests). Small-scale exploratory traces, not systematically analyzed.

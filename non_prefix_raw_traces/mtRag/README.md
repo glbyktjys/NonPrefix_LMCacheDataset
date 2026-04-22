@@ -111,7 +111,7 @@ efficiency(S) = max(0, 1 - 2C / S)
 Each trace file is a JSONL recording of HTTP requests from OpenClaw to the vLLM backend hosting MiniMax-M2.5, one file per session:
 
 ```
-traces/
+non_prefix_raw_traces/mtRag/
   clapnq_clapnq_{session_hash}_trace.jsonl   (29 files)
   cloud_cloud_{session_hash}_trace.jsonl      (26 files)
   govt_govt_{session_hash}_trace.jsonl        (28 files)

@@ -1,6 +1,6 @@
 # Offline Analysis
 
-Offline CacheBlend-style reuse analysis for Anthropic-format raw traces.
+Offline CacheBlend-style reuse analysis for Anthropic-format and OpenAI-format raw traces.
 
 Estimates prefix reusable, non-prefix reusable, and new compute tokens per session, and generates an interactive HTML dashboard to visualize chunk reuse.
 
@@ -8,14 +8,27 @@ The estimator is inspired by CacheBlend, but it is still an offline approximatio
 
 ## Usage
 
-Generate analysis JSON:
+The analyzer supports two trace formats via `--format`:
+
+- **`claudecode`** (default) — Anthropic API traces (`/v1/messages`). Prompt is serialized as: tools, system, messages.
+- **`openclaw`** — OpenAI/vLLM traces (`/v1/chat/completions`). System prompt is `messages[0]` with `role="system"`. Tools use OpenAI function-call format.
+
+### Anthropic format (Claude Code traces)
 
 ```bash
 python offline_analysis/analyze_trace.py \
   raw_traces/ClaudeCode/testing_compact_session_trace.jsonl
 ```
 
-Generate analysis JSON + interactive HTML dashboard:
+### OpenAI format (OpenClaw / vLLM traces)
+
+```bash
+python offline_analysis/analyze_trace.py \
+  non_prefix_raw_traces/mtRag/clapnq_clapnq_0208bf26ec357a803445290fa88a2e9e_trace.jsonl \
+  --format openclaw
+```
+
+### HTML dashboard
 
 ```bash
 python offline_analysis/analyze_trace.py \
@@ -25,28 +38,22 @@ python offline_analysis/analyze_trace.py \
 
 Then open `output.html` in your browser. Click a segment in the bar to follow where that text appears in later turns. Shift+click to track multiple regions.
 
-Custom output path and verbose mode:
+### Other options
 
 ```bash
 python offline_analysis/analyze_trace.py \
   raw_traces/ClaudeCode/testing_compact_session_trace.jsonl \
   --output my_analysis.json \
   --html my_dashboard.html \
-  --log-each-entry
-```
-
-Include assistant thinking blocks (stripped by default):
-
-```bash
-python offline_analysis/analyze_trace.py \
-  raw_traces/ClaudeCode/testing_compact_session_trace.jsonl \
+  --chunk-size 256 \
+  --log-each-entry \
   --include-assistant-thinking
 ```
 
 ## Files
 
 - `cacheblend_hashes.py` — core two-hash engine: rolling prefix storage hashes + polynomial content fingerprints
-- `analyze_trace.py` — reads Anthropic raw traces, reconstructs prompts, computes reuse metrics, generates analysis JSON and optional HTML dashboard
+- `analyze_trace.py` — reads Anthropic or OpenAI/OpenClaw raw traces (`--format claudecode|openclaw`), reconstructs prompts, computes reuse metrics, generates analysis JSON and optional HTML dashboard
 - `trace_viewer.html` — HTML template for the interactive dashboard (used by `analyze_trace.py --html`)
 
 ## Goal
@@ -67,7 +74,8 @@ Two cache-source modes (both computed automatically):
 
 The analyzer only scores real inference requests:
 
-- `type="request"` with `path="/v1/messages"`
+- **claudecode format**: `type="request"` with `path="/v1/messages"`
+- **openclaw format**: `type="request"` with `path="/v1/chat/completions"`
 
 It does not score:
 
@@ -115,10 +123,11 @@ Implemented in `_poly_hash`, `rolling_window_fingerprints`, and `BlendTokenRange
 
 ## How We Analyze One Request
 
-For each `/v1/messages` request in a session:
+For each inference request in a session:
 
-1. Build the model-visible prompt from `body.system`, `body.messages`, `body.tools`
-2. Serialize in Anthropic cache order: tools, system, messages
+1. Build the model-visible prompt:
+   - **claudecode**: from `body.system`, `body.messages`, `body.tools`; serialized as tools → system → messages
+   - **openclaw**: from `body.messages` (system is `messages[0]`), `body.tools`; serialized as messages (system-first)
 3. Tokenize with `tiktoken o200k_base`
 4. Compute rolling storage hashes
 5. Compare against prior request sequences for prefix reuse
