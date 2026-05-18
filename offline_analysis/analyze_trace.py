@@ -928,6 +928,7 @@ class RequestMetrics:
     tool_names: list[str] = field(default_factory=list)
     messages_summary: list[dict[str, Any]] = field(default_factory=list)
     request_body_compact: dict[str, Any] = field(default_factory=dict)
+    raw_request_body: dict[str, Any] = field(default_factory=dict, repr=False)
     response_body_compact: dict[str, Any] = field(default_factory=dict)
     agent_handoffs: list[dict[str, Any]] = field(default_factory=list)
     timestamp_utc: str = ""
@@ -968,7 +969,9 @@ class RequestMetrics:
             "system_preview": self.system_preview,
             "tool_names": self.tool_names,
             "messages_summary": self.messages_summary,
-            "request_body_compact": self.request_body_compact,
+            "request_body_compact": (
+                self.raw_request_body if include_prompt_text else self.request_body_compact
+            ),
             "response_body_compact": self.response_body_compact,
             "agent_handoffs": self.agent_handoffs,
             "timestamp_utc": self.timestamp_utc,
@@ -1224,6 +1227,7 @@ class SessionState:
             tool_names=tool_names_list,
             messages_summary=messages_summary,
             request_body_compact=request_body_compact,
+            raw_request_body=body,
             agent_handoffs=agent_handoffs,
             timestamp_utc=req_timestamp_utc,
             timestamp_rel_s=req_timestamp_rel_s,
@@ -1859,10 +1863,20 @@ def main() -> int:
         action="store_true",
         help="Print one compact log line for each scored request and response.",
     )
+    parser.add_argument(
+        "--include-raw-text",
+        action="store_true",
+        help="Force-embed full prompt text into the HTML dashboard. "
+        "Default: on for claudecode, off for openclaw (sessions can be very large). "
+        "Use this to opt in for short openclaw traces (e.g. non_prefix_raw_traces/mtRag).",
+    )
     args = parser.parse_args()
 
-    # For openclaw, never embed full prompt text — sessions are too long
-    include_prompt_text = args.html is not None and args.trace_format != "openclaw"
+    # By default openclaw skips embedding full prompt text — sessions can be very long.
+    # --include-raw-text forces it back on.
+    include_prompt_text = args.html is not None and (
+        args.trace_format != "openclaw" or args.include_raw_text
+    )
 
     payload = analyze_trace_path(
         args.trace_path.resolve(),
@@ -1883,8 +1897,9 @@ def main() -> int:
     print(f"JSON: {output_path}")
 
     if args.html is not None:
-        # For openclaw, strip heavy fields to keep HTML small
-        html_data = _strip_for_lightweight_html(payload) if args.trace_format == "openclaw" else payload
+        # For openclaw, strip heavy fields to keep HTML small unless caller opted in.
+        should_strip = args.trace_format == "openclaw" and not args.include_raw_text
+        html_data = _strip_for_lightweight_html(payload) if should_strip else payload
         html_content = generate_html(html_data)
         html_path = args.html.resolve()
         html_path.write_text(html_content, encoding="utf-8")

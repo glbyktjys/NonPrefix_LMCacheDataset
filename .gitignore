@@ -10,3 +10,7 @@ __pycache__/
 mtRag_traces_prompt_building/cloud_original.jsonl
 mtRag_traces_prompt_building/clapnq_original.jsonl
 raw_traces/repo_on_OpenClaw/
+SCBench/data/
+TopiOCQA/data/
+TopiOCQA/*.jsonl
+TopiOCQA/data/full_wiki_segments.tsv

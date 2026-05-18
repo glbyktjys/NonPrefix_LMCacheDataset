@@ -1739,6 +1739,11 @@
     function renderAll() {
       if (!state.analysis) return;
       el.tabBar.classList.remove("hidden");
+      // Timeline shows main/subagent/compact orchestration — only meaningful for claudecode traces.
+      var timelineBtn = el.tabBar.querySelector('button[data-tab="timeline"]');
+      if (timelineBtn) {
+        timelineBtn.classList.toggle("hidden", state.analysis.trace_format === "openclaw");
+      }
       renderBillingToggle();
       renderSessions();
       renderSummary();

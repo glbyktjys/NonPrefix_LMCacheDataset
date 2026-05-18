@@ -17,7 +17,8 @@ The analyzer supports two trace formats via `--format`:
 
 ```bash
 python offline_analysis/analyze_trace.py \
-  raw_traces/ClaudeCode/testing_compact_session_trace.jsonl
+  raw_traces/ClaudeCode/testing_compact_session_trace.jsonl \
+  --html output.html
 ```
 
 ### OpenAI format (OpenClaw / vLLM traces)
@@ -25,18 +26,14 @@ python offline_analysis/analyze_trace.py \
 ```bash
 python offline_analysis/analyze_trace.py \
   non_prefix_raw_traces/mtRag/clapnq_clapnq_0208bf26ec357a803445290fa88a2e9e_trace.jsonl \
-  --format openclaw
+  --format openclaw \
+  --html output.html \
+  --include-raw-text
 ```
 
-### HTML dashboard
+Then open `output.html` in your browser to view the interactive trace visualizer.
 
-```bash
-python offline_analysis/analyze_trace.py \
-  raw_traces/ClaudeCode/testing_compact_session_trace.jsonl \
-  --html output.html
-```
-
-Then open `output.html` in your browser. Click a segment in the bar to follow where that text appears in later turns. Shift+click to track multiple regions.
+Note: openclaw traces skip embedding the full prompt text by default because some sessions are very large. The `non_prefix_raw_traces/mtRag/` files are short enough to embed safely — pass `--include-raw-text` to populate the Raw Trace tab. Omit it for very large traces (e.g. `raw_traces/mtRag_on_OpenClaw/`, which are 50–100MB).
 
 ### Other options
 
